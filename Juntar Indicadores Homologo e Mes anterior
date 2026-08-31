@@ -1,0 +1,27 @@
+%_eg_conditional_dropds(WORK.QUERY_FOR_SAS_DASHBOARD_0003);
+
+PROC SQL;
+   CREATE TABLE WORK.QUERY_FOR_SAS_DASHBOARD_0003 AS 
+   SELECT t1.brand, 
+          t1.categoria, 
+          t1.pack, 
+          t1.anomes_sim, 
+          t1.Quotes, 
+          t1.Policies, 
+          t1.Policies_Premium, 
+          t2.Quotes_Homologo, 
+          t2.Policies_Homologo, 
+          t2.Policies_Premium_Homologo, 
+          t3.Quotes_mesanterior, 
+          t3.Policies_mesanterior, 
+          t3.Policies_Premium_mesanterior
+      FROM WORK.SAS_DASHBOARD t1
+           LEFT JOIN WORK.QUERY_FOR_SAS_DASHBOARD_0001 t2 ON (t1.anomes_sim = t2.anomes_sim) AND (t1.brand = t2.brand) 
+          AND (t1.categoria = t2.categoria) AND (t1.pack = t2.pack)
+           LEFT JOIN WORK.QUERY_FOR_SAS_DASHBOARD_000_0000 t3 ON (t1.anomes_sim = t3.anomes_sim) AND (t1.brand = 
+          t3.brand) AND (t1.categoria = t3.categoria) AND (t1.pack = t3.pack)
+      ORDER BY t1.brand,
+               t1.categoria,
+               t1.pack,
+               t1.anomes_sim;
+QUIT;
