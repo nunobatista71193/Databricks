@@ -1,0 +1,22 @@
+%_eg_conditional_dropds(WORK.SAS_Dashboard);
+
+PROC SQL;
+   CREATE TABLE WORK.SAS_Dashboard AS 
+   SELECT t1.brand, 
+          t1.categoria, 
+          t1.pack, 
+          t1.anomes_sim, 
+          /* Quotes */
+            (SUM(t1.Quotes)) AS Quotes, 
+          /* Policies */
+            (SUM(t1.Policies)) AS Policies, 
+          /* Quotes_Premium */
+            (SUM(t1.Quotes_Premium)) AS Quotes_Premium, 
+          /* Policies_Premium */
+            (SUM(t1.Policies_Premium)) AS Policies_Premium
+      FROM WORK.SAS_OVERVIEW_DASH_MOTOR_1 t1
+      GROUP BY t1.brand,
+               t1.categoria,
+               t1.pack,
+               t1.anomes_sim;
+QUIT;
