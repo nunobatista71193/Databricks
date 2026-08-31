@@ -1,0 +1,13 @@
+%_eg_conditional_dropds(WORK.QUERY_FOR_SAS_DASHBOARD_0000);
+
+PROC SQL;
+   CREATE TABLE WORK.QUERY_FOR_SAS_DASHBOARD_0000 AS 
+   SELECT DISTINCT t1.anomes_sim, 
+          /* anomes_homologo */
+            (t1.anomes_sim-100) AS anomes_homologo, 
+          /* anomes_anterior */
+            (case when (substr(put(t1.anomes_sim,z6.),5,2)="01") then t1.anomes_sim-89 
+            else t1.anomes_sim-1 end
+            ) AS anomes_anterior
+      FROM WORK.SAS_DASHBOARD t1;
+QUIT;
