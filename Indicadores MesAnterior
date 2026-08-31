@@ -1,0 +1,16 @@
+%_eg_conditional_dropds(WORK.QUERY_FOR_SAS_DASHBOARD_000_0000);
+
+PROC SQL;
+   CREATE TABLE WORK.QUERY_FOR_SAS_DASHBOARD_000_0000 AS 
+   SELECT t1.brand, 
+          t1.categoria, 
+          t1.pack, 
+          t2.anomes_sim, 
+          t2.anomes_anterior, 
+          t1.Quotes AS Quotes_mesanterior, 
+          t1.Policies AS Policies_mesanterior, 
+          t1.Quotes_Premium AS Quotes_Premium_mesanterior, 
+          t1.Policies_Premium AS Policies_Premium_mesanterior
+      FROM WORK.SAS_DASHBOARD t1
+           INNER JOIN WORK.QUERY_FOR_SAS_DASHBOARD_0000 t2 ON (t1.anomes_sim = t2.anomes_anterior);
+QUIT;
