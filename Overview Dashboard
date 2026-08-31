@@ -1,0 +1,29 @@
+%_eg_conditional_dropds(WORK.EXPORT_SAS_OVERVIEW);
+
+PROC SQL;
+   CREATE TABLE WORK.EXPORT_SAS_OVERVIEW AS 
+   SELECT t1.data_simulacao, 
+          t1.brand, 
+          t1.pack, 
+          /* Quotes */
+            (SUM(t1.Quotes)) AS Quotes, 
+          /* Policies */
+            (SUM(t1.Policies)) AS Policies, 
+          /* Policies_Premium */
+            (SUM(t1.Policies_Premium)) AS Policies_Premium, 
+          /* SQuotes_Premium */
+            (SUM(t1.Quotes_Premium)) AS SQuotes_Premium, 
+          t1.canal, 
+          t1.distrito_designacao, 
+          t1.NUM_ISP_DESC, 
+          t1.Segmento_Target
+      FROM WORK.SAS_OVERVIEW_DASH_MOTOR_1 t1
+      GROUP BY t1.data_simulacao,
+               t1.brand,
+               t1.pack,
+               t1.canal,
+               t1.distrito_designacao,
+               t1.NUM_ISP_DESC,
+               t1.Segmento_Target
+      ORDER BY t1.brand;
+QUIT;
