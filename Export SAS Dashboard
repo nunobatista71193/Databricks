@@ -1,0 +1,36 @@
+%_eg_conditional_dropds(WORK.EXPORT_SAS_DASHBOARD);
+
+PROC SQL;
+   CREATE TABLE WORK.EXPORT_SAS_DASHBOARD AS 
+   SELECT t1.brand, 
+          t1.categoria, 
+          t1.pack, 
+          t1.anomes_sim, 
+          /* Quotes */
+            (SUM(t1.Quotes)) AS Quotes, 
+          /* Policies */
+            (SUM(t1.Policies)) AS Policies, 
+          /* Policies_Premium */
+            (SUM(t1.Policies_Premium)) AS Policies_Premium, 
+          /* Quotes_Homologo */
+            (SUM(t1.Quotes_Homologo)) AS Quotes_Homologo, 
+          /* Policies_Homologo */
+            (SUM(t1.Policies_Homologo)) AS Policies_Homologo, 
+          /* Policies_Premium_Homologo */
+            (SUM(t1.Policies_Premium_Homologo)) AS Policies_Premium_Homologo, 
+          /* Quotes_mesanterior */
+            (SUM(t1.Quotes_mesanterior)) AS Quotes_mesanterior, 
+          /* Policies_mesanterior */
+            (SUM(t1.Policies_mesanterior)) AS Policies_mesanterior, 
+          /* Policies_Premium_mesanterior */
+            (SUM(t1.Policies_Premium_mesanterior)) AS Policies_Premium_mesanterior
+      FROM WORK.APPEND_TABLE_0001 t1
+      GROUP BY t1.brand,
+               t1.categoria,
+               t1.pack,
+               t1.anomes_sim
+      ORDER BY t1.brand,
+               t1.categoria,
+               t1.pack,
+               t1.anomes_sim;
+QUIT;
