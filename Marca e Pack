@@ -1,0 +1,9 @@
+%_eg_conditional_dropds(WORK.QUERY_FOR_SAS_DASHBOARD_0005);
+
+PROC SQL;
+   CREATE TABLE WORK.QUERY_FOR_SAS_DASHBOARD_0005 AS 
+   SELECT DISTINCT t1.brand, 
+          t1.pack, 
+          t1.anomes_sim
+      FROM WORK.SAS_DASHBOARD t1;
+QUIT;
