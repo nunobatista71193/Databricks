@@ -1,0 +1,10 @@
+%_eg_conditional_dropds(WORK.QUERY_FOR_SAS_DASHBOARD_0004);
+
+PROC SQL;
+   CREATE TABLE WORK.QUERY_FOR_SAS_DASHBOARD_0004 AS 
+   SELECT DISTINCT /* brand */
+                     ('AGEAS Seguros') AS brand, 
+          t1.categoria, 
+          t1.anomes_sim
+      FROM WORK.SAS_DASHBOARD t1;
+QUIT;
