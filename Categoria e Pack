@@ -1,0 +1,36 @@
+%_eg_conditional_dropds(WORK.SAS_OVERVIEW_DASH_MOTOR_1);
+
+PROC SQL;
+   CREATE TABLE WORK.SAS_OVERVIEW_DASH_MOTOR_1 AS 
+   SELECT t1.anomes_sim, 
+          t1.data_simulacao, 
+          t1.brand, 
+          /* categoria */
+            (case when t1.vt_categoria in ("1. Ligeiro Passageiros","3. Ligeiro Mercadorias","4. Caminheta") then 
+            "Ligeiros, Mistos e Caminhetas"
+            when t1.vt_categoria="2. Motociclos / Ciclomotor" then "Motociclos / Ciclomotor"
+            else "Outros" end) AS categoria, 
+          t1.canal, 
+          t1.pack, 
+          t1.distrito_designacao, 
+          t1.NUM_ISP_DESC, 
+          t1.Segmento_Target, 
+          /* Quotes */
+            (SUM(t1.Quotes)) AS Quotes, 
+          /* Policies */
+            (SUM(t1.Policies)) AS Policies, 
+          /* Quotes_Premium */
+            (SUM(t1.Quotes_Premium)) AS Quotes_Premium, 
+          /* Policies_Premium */
+            (SUM(t1.Policies_Premium)) AS Policies_Premium
+      FROM WORK.OVERVIEW_DASH_MOTOR t1
+      GROUP BY t1.anomes_sim,
+               t1.data_simulacao,
+               t1.brand,
+               (CALCULATED categoria),
+               t1.canal,
+               t1.pack,
+               t1.distrito_designacao,
+               t1.NUM_ISP_DESC,
+               t1.Segmento_Target;
+QUIT;
