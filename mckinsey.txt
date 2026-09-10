@@ -1,0 +1,40 @@
+@and(
+  or(
+    contains(toLower(coalesce(item()?['title'], '')), 'insurance'),
+    contains(toLower(coalesce(item()?['summary'], '')), 'insurance'),
+    contains(toLower(coalesce(item()?['title'], '')), 'insurer'),
+    contains(toLower(coalesce(item()?['summary'], '')), 'insurer'),
+    contains(toLower(coalesce(item()?['title'], '')), 'underwriting'),
+    contains(toLower(coalesce(item()?['summary'], '')), 'underwriting'),
+    contains(toLower(coalesce(item()?['title'], '')), 'claims'),
+    contains(toLower(coalesce(item()?['summary'], '')), 'claims'),
+    contains(toLower(coalesce(item()?['title'], '')), 'premium'),
+    contains(toLower(coalesce(item()?['summary'], '')), 'premium'),
+    contains(toLower(coalesce(item()?['title'], '')), 'policyholder'),
+    contains(toLower(coalesce(item()?['summary'], '')), 'policyholder')
+  ),
+  or(
+    contains(toLower(coalesce(item()?['title'], '')), 'auto insurance'),
+    contains(toLower(coalesce(item()?['summary'], '')), 'auto insurance'),
+    contains(toLower(coalesce(item()?['title'], '')), 'automotive insurance'),
+    contains(toLower(coalesce(item()?['summary'], '')), 'automotive insurance'),
+    contains(toLower(coalesce(item()?['title'], '')), 'motor insurance'),
+    contains(toLower(coalesce(item()?['summary'], '')), 'motor insurance'),
+    contains(toLower(coalesce(item()?['title'], '')), 'car insurance'),
+    contains(toLower(coalesce(item()?['summary'], '')), 'car insurance'),
+    contains(toLower(coalesce(item()?['title'], '')), 'vehicle insurance'),
+    contains(toLower(coalesce(item()?['summary'], '')), 'vehicle insurance'),
+    contains(toLower(coalesce(item()?['title'], '')), 'automotive'),
+    contains(toLower(coalesce(item()?['summary'], '')), 'automotive'),
+    contains(toLower(coalesce(item()?['title'], '')), 'mobility'),
+    contains(toLower(coalesce(item()?['summary'], '')), 'mobility'),
+    contains(toLower(coalesce(item()?['title'], '')), 'telematics'),
+    contains(toLower(coalesce(item()?['summary'], '')), 'telematics'),
+    contains(toLower(coalesce(item()?['title'], '')), 'connected car'),
+    contains(toLower(coalesce(item()?['summary'], '')), 'connected car'),
+    contains(toLower(coalesce(item()?['title'], '')), 'electric vehicle'),
+    contains(toLower(coalesce(item()?['summary'], '')), 'electric vehicle'),
+    contains(toLower(coalesce(item()?['title'], '')), 'autonomous vehicle'),
+    contains(toLower(coalesce(item()?['summary'], '')), 'autonomous vehicle')
+  )
+)
