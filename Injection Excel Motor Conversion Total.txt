@@ -2,21 +2,7 @@
 # INGESTAO RESUMO AGS / OCS / SD OVERVIEW
 # OVERWRITE COMPLETO — versao otimizada
 # ------------------------------------------------------------
-# O que mudou (e porque o original chegava a 2h):
-#   1) spark.createDataFrame(pandas) no driver e o pior gargalo.
-#      Agora cada Excel e convertido para Parquet e o Spark le
-#      o Parquet de forma distribuida.
-#   2) Ja nao se acumulam todos os DataFrames em memoria para
-#      fazer unionByName. O merge de schemas e feito no read
-#      do Parquet.
-#   3) decode / regras de negocio deixam de percorrer celula
-#      a celula quando nao e preciso (so colunas string / OCS).
-#   4) Leitura Excel forca calamine (10-50x mais rapido que
-#      openpyxl). Instalar se faltar: %pip install python-calamine pyarrow
-#   5) Um ficheiro de cada vez no driver + gc, para nao
-#      explodir memoria e comecar a swappar.
-#   6) Logs com tempos por fase.
-# Regras de negocio mantidas:
+# Regras:
 #   1) AGS: CDPOSTAL -> CODIGO_POSTAL
 #   2) OCS: CODIGO_POSTAL so XXXX-XXX (ou 7 digitos -> XXXX-XXX)
 #   3) DROP das tabelas de destino no inicio
@@ -31,7 +17,7 @@ import time
 from collections import defaultdict
 
 import pandas as pd
-from pyspark.sql.functions import current_timestamp, lit
+from pyspark.sql.functions import current_timestamp
 
 
 # ============================================================
@@ -65,13 +51,8 @@ FILE_MAPPINGS = [
 HEADER_SCAN_ROWS = 15
 
 # Se True, todas as colunas de negocio vao como string para o Delta.
-# Evita conflitos de tipo entre anos (int vs double vs string) no mergeSchema.
-# Recomendado para tabelas "overview" de Excel.
+# Evita conflitos de tipo entre anos no mergeSchema.
 CAST_ALL_TO_STRING = True
-
-CODIGO_POSTAL_RE = re.compile(r"^(\d{4})-(\d{3})$")
-SO_DIGITOS_RE = re.compile(r"^\d{7}$")
-SO_DIGITOS_FLOAT_RE = re.compile(r"^\d{7}\.0+$")
 
 if os.path.isdir("/local_disk0/tmp"):
     LOCAL_TMP = "/local_disk0/tmp/excel_ingest"
@@ -79,20 +60,6 @@ else:
     LOCAL_TMP = "/tmp/excel_ingest"
 
 os.makedirs(LOCAL_TMP, exist_ok=True)
-
-
-# ============================================================
-# SPARK — configs que realmente importam neste job
-# ============================================================
-
-spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
-spark.conf.set("spark.sql.execution.arrow.pyspark.fallback.enabled", "true")
-spark.conf.set("spark.sql.parquet.mergeSchema", "true")
-spark.conf.set("spark.sql.files.ignoreCorruptFiles", "false")
-spark.conf.set("spark.sql.adaptive.enabled", "true")
-# Job de ingestao, nao um shuffle enorme: evita 200 particoes minusculas.
-spark.conf.set("spark.sql.shuffle.partitions", "16")
-spark.conf.set("spark.sql.adaptive.coalescePartitions.enabled", "true")
 
 
 def log(msg=""):
@@ -109,6 +76,26 @@ def timed(label):
             log("  [tempo] " + label + ": " + "{:.1f}s".format(time.time() - self.t0))
 
     return _T()
+
+
+# ============================================================
+# SPARK — configs opcionais (Spark Connect pode recusar algumas)
+# ============================================================
+
+def try_spark_conf(key, value):
+    try:
+        spark.conf.set(key, value)
+        return True
+    except Exception as exc:
+        log("Conf ignorada (" + key + "): " + str(exc).split("\n")[0][:180])
+        return False
+
+
+try_spark_conf("spark.sql.parquet.mergeSchema", "true")
+try_spark_conf("spark.sql.files.ignoreCorruptFiles", "false")
+try_spark_conf("spark.sql.adaptive.enabled", "true")
+try_spark_conf("spark.sql.shuffle.partitions", "16")
+try_spark_conf("spark.sql.adaptive.coalescePartitions.enabled", "true")
 
 
 # ============================================================
@@ -164,7 +151,6 @@ def decode_cell_fast(value):
 
 
 def decode_object_column(series):
-    """So percorre valores string. Evita .map em colunas numericas."""
     if series.dtype != object:
         return series
 
@@ -263,7 +249,6 @@ def is_ocs_file(source_file):
 
 
 def rename_ags_cdpostal(columns):
-    """AGS: CDPOSTAL (qualquer casing) passa a CODIGO_POSTAL."""
     novas = []
     ja_usou_codigo = False
 
@@ -278,10 +263,6 @@ def rename_ags_cdpostal(columns):
 
 
 def normalizar_codigo_postal_series(series):
-    """
-    Vectorizado. Aceita XXXX-XXX ou 7 digitos (1234567 -> 1234-567).
-    Resto -> None.
-    """
     text = series.map(
         lambda v: None
         if v is None or (isinstance(v, float) and pd.isna(v))
@@ -363,7 +344,6 @@ def copy_to_local_disk(volume_path, file_name):
 def pick_excel_engine():
     try:
         import python_calamine  # noqa: F401
-
         return "calamine"
     except Exception:
         log(
@@ -534,8 +514,6 @@ def read_excel_fast(local_copy, source_file, preferred_sheet):
                 pdf[c] = decode_object_column(pdf[c])
 
     pdf = aplicar_regras_negocio(pdf, source_file)
-
-    # NaN -> None sem varrer celula a celula em Python puro
     pdf = pdf.where(pd.notnull(pdf), None)
 
     if CAST_ALL_TO_STRING:
