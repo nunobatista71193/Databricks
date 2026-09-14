@@ -1,0 +1,730 @@
+# ============================================================
+# INGESTAO RESUMO AGS / OCS / SD OVERVIEW
+# OVERWRITE COMPLETO
+# Leitura RAPIDA com pandas (nao percorre celula a celula)
+# ------------------------------------------------------------
+# Regras extra:
+#   1) Ficheiro AGS: coluna CDPOSTAL -> CODIGO_POSTAL
+#   2) Ficheiro OCS: CODIGO_POSTAL so aceita XXXX-XXX
+#      (4 digitos + hifen + 3 digitos). Resto fica null.
+#   3) Apaga as tabelas de destino no inicio.
+#   4) Varios ficheiros podem ir para a MESMA tabela
+#      (union + overwrite no fim de cada destino).
+# ============================================================
+
+import os
+import re
+import shutil
+from collections import defaultdict
+
+import pandas as pd
+from pyspark.sql.functions import current_timestamp, lit
+
+
+# ============================================================
+# CONFIGURACAO
+# ============================================================
+
+catalog_name = "agpt_insurance_dv_catalog"
+schema_name = "wkb_bus_operations_price"
+
+source_folder = "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/01_raw/"
+
+# Varios ficheiros -> a mesma tabela: acrescenta linhas aqui.
+# preferred_sheet = None escolhe a primeira sheet do workbook.
+FILE_MAPPINGS = [
+    {
+        "file": "WORK_sim_ags_final.xlsx",
+        "table": "ags_overview",
+        "preferred_sheet": None,
+    },
+    {
+        "file": "WORK_sim_ags_final_2025.xlsx",
+        "table": "ags_overview",
+        "preferred_sheet": None,
+    },
+    {
+        "file": "WORK_sim_ags_final_2024.xlsx",
+        "table": "ags_overview",
+        "preferred_sheet": None,
+    },
+    {
+        "file": "WORK_sim_ags_final_2023.xlsx",
+        "table": "ags_overview",
+        "preferred_sheet": None,
+    },
+    {
+        "file": "WORK_sim_ags_final_2022.xlsx",
+        "table": "ags_overview",
+        "preferred_sheet": None,
+    },
+    {
+        "file": "WORK_sim_ags_final_2021.xlsx",
+        "table": "ags_overview",
+        "preferred_sheet": None,
+    },
+    {
+        "file": "WORK_SIM_OCS_FINAL.xlsx",
+        "table": "ocs_overview",
+        "preferred_sheet": None,
+    },
+    {
+        "file": "WORK_SIMULACOES_SD_2025.xlsx",
+        "table": "sd_overview",
+        "preferred_sheet": None,
+    },
+    {
+        "file": "WORK_SIMULACOES_SD_2024.xlsx",
+        "table": "sd_overview",
+        "preferred_sheet": None,
+    },
+    {
+        "file": "WORK_SIMULACOES_SD_2023.xlsx",
+        "table": "sd_overview",
+        "preferred_sheet": None,
+    },
+    {
+        "file": "WORK_SIMULACOES_SD_2022.xlsx",
+        "table": "sd_overview",
+        "preferred_sheet": None,
+    },
+    {
+        "file": "WORK_SIMULACOES_SD_2021.xlsx",
+        "table": "sd_overview",
+        "preferred_sheet": None,
+    },
+    {
+        "file": "WORK_SIMULACOES_SD.xlsx",
+        "table": "sd_overview",
+        "preferred_sheet": None,
+    },
+]
+
+HEADER_SCAN_ROWS = 15
+
+CODIGO_POSTAL_RE = re.compile(r"^(\d{4})-(\d{3})$")
+SO_DIGITOS_RE = re.compile(r"^\d{7}$")
+
+if os.path.isdir("/local_disk0/tmp"):
+    LOCAL_TMP = "/local_disk0/tmp/excel_ingest"
+else:
+    LOCAL_TMP = "/tmp/excel_ingest"
+
+os.makedirs(LOCAL_TMP, exist_ok=True)
+
+
+# ============================================================
+# DECODE XML DO EXCEL (_x0020_ = espaco)
+# ============================================================
+
+_XML_ESCAPE_RE = re.compile(r"_x([0-9A-Fa-f]{4,8})_")
+_XML_ESCAPE_LOOSE_RE = re.compile(
+    r"(?<![A-Za-z0-9])x([0-9A-Fa-f]{4})(?![A-Za-z0-9])"
+)
+
+
+def decode_excel_xml_escapes(value):
+    if value is None or not isinstance(value, str):
+        return value
+
+    text = value
+
+    def _to_char(match):
+        try:
+            return chr(int(match.group(1), 16))
+        except (ValueError, OverflowError):
+            return match.group(0)
+
+    text = _XML_ESCAPE_RE.sub(_to_char, text)
+
+    if "x00" in text:
+        text = _XML_ESCAPE_LOOSE_RE.sub(_to_char, text)
+
+    text = text.replace("\xa0", " ")
+    text = text.replace("\u200b", "")
+    return text
+
+
+def decode_cell(value):
+    if isinstance(value, str):
+        text = decode_excel_xml_escapes(value).strip()
+        if text == "":
+            return None
+        return text
+    return value
+
+
+# ============================================================
+# SANITIZACAO DE NOMES (Delta)
+# ============================================================
+
+def sanitize_column_name(name):
+    nome = decode_excel_xml_escapes(str(name) if name is not None else "")
+    nome = nome.strip()
+
+    if nome.lower().startswith("unnamed") or nome.lower() in (
+        "",
+        "nan",
+        "none",
+        "nat",
+    ):
+        return "coluna_sem_nome"
+
+    nome = re.sub(r"[ ,;{}()\n\t\r=]", "_", nome)
+
+    substituicoes = {
+        "º": "o",
+        "ª": "a",
+        "%": "pct",
+        "/": "_",
+        "\\": "_",
+        "#": "num",
+        "€": "eur",
+        "$": "usd",
+        "-": "_",
+        ".": "_",
+        "?": "",
+        "!": "",
+        "*": "",
+        "+": "mais",
+        "&": "e",
+        "'": "",
+        '"': "",
+    }
+
+    for old, new in substituicoes.items():
+        nome = nome.replace(old, new)
+
+    nome = re.sub("_+", "_", nome)
+    nome = nome.strip("_")
+
+    if nome == "":
+        nome = "coluna_sem_nome"
+
+    if nome[0].isdigit():
+        nome = "c_" + nome
+
+    return nome
+
+
+def uniquify_names(names):
+    usados = {}
+    resultado = []
+    for nome in names:
+        if nome not in usados:
+            usados[nome] = 0
+            resultado.append(nome)
+        else:
+            usados[nome] += 1
+            resultado.append(nome + "_" + str(usados[nome]))
+    return resultado
+
+
+def is_ags_file(source_file):
+    return "ags" in source_file.lower()
+
+
+def is_ocs_file(source_file):
+    return "ocs" in source_file.lower()
+
+
+def rename_ags_cdpostal(columns):
+    """AGS: CDPOSTAL (qualquer casing) passa a CODIGO_POSTAL."""
+    novas = []
+    ja_usou_codigo = False
+
+    for nome in columns:
+        if nome.upper() == "CDPOSTAL" and not ja_usou_codigo:
+            novas.append("CODIGO_POSTAL")
+            ja_usou_codigo = True
+        else:
+            novas.append(nome)
+
+    return uniquify_names(novas)
+
+
+def normalizar_codigo_postal(value):
+    """
+    Aceita:
+      - ja no formato XXXX-XXX
+      - 7 digitos (1234567 -> 1234-567)
+    Qualquer outra coisa -> None
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, float) and pd.isna(value):
+        return None
+
+    if isinstance(value, int):
+        text = str(value)
+    else:
+        text = str(value).strip()
+
+    if text == "" or text.lower() in ("nan", "none", "nat"):
+        return None
+
+    text = decode_excel_xml_escapes(text).strip()
+    text = text.replace(" ", "").replace("\xa0", "")
+
+    if CODIGO_POSTAL_RE.match(text):
+        return text
+
+    if SO_DIGITOS_RE.match(text):
+        return text[:4] + "-" + text[4:]
+
+    if re.match(r"^\d{7}\.0+$", text):
+        text = text.split(".")[0]
+        return text[:4] + "-" + text[4:]
+
+    return None
+
+
+def aplicar_regras_negocio(pdf, source_file):
+    if is_ags_file(source_file):
+        pdf.columns = rename_ags_cdpostal(list(pdf.columns))
+        print("Regra AGS aplicada: CDPOSTAL -> CODIGO_POSTAL")
+        print("Colunas apos rename: " + str(list(pdf.columns)))
+
+    if is_ocs_file(source_file):
+        alvo = None
+        for c in pdf.columns:
+            if c.upper() == "CODIGO_POSTAL":
+                alvo = c
+                break
+
+        if alvo is None:
+            print("AVISO OCS: coluna CODIGO_POSTAL nao encontrada. Sem transformacao de conteudo.")
+        else:
+            if alvo != "CODIGO_POSTAL":
+                pdf = pdf.rename(columns={alvo: "CODIGO_POSTAL"})
+                alvo = "CODIGO_POSTAL"
+            pdf[alvo] = pdf[alvo].map(normalizar_codigo_postal)
+            validos = pdf[alvo].notna().sum()
+            print(
+                "Regra OCS aplicada em CODIGO_POSTAL: "
+                + "{:,}".format(int(validos))
+                + " validos / "
+                + "{:,}".format(len(pdf))
+                + " linhas (formato XXXX-XXX)"
+            )
+
+    return pdf
+
+
+# ============================================================
+# I/O
+# ============================================================
+
+def to_local_path(path):
+    if path.startswith("dbfs:"):
+        return path.replace("dbfs:", "", 1)
+    return path
+
+
+def copy_to_local_disk(volume_path, file_name):
+    local_src = to_local_path(volume_path)
+    local_copy = os.path.join(LOCAL_TMP, file_name)
+
+    if os.path.exists(local_copy):
+        os.remove(local_copy)
+
+    with open(local_src, "rb") as src, open(local_copy, "wb") as dst:
+        shutil.copyfileobj(src, dst, length=8 * 1024 * 1024)
+
+    return local_copy
+
+
+def pick_excel_engine():
+    try:
+        import python_calamine  # noqa: F401
+        return "calamine"
+    except Exception:
+        return "openpyxl"
+
+
+def full_table_name(table):
+    return catalog_name + "." + schema_name + "." + table
+
+
+def drop_target_tables():
+    destinos = []
+    for item in FILE_MAPPINGS:
+        if item["table"] not in destinos:
+            destinos.append(item["table"])
+
+    print("")
+    print("=" * 80)
+    print("APAGAR TABELAS DE DESTINO")
+    print("=" * 80)
+
+    for table in destinos:
+        fqn = full_table_name(table)
+        print("DROP TABLE IF EXISTS " + fqn)
+        spark.sql("DROP TABLE IF EXISTS " + fqn)
+
+    print("Tabelas de destino apagadas: " + str(destinos))
+
+
+EXCEL_ENGINE = pick_excel_engine()
+print("Engine Excel: " + EXCEL_ENGINE)
+
+
+# ============================================================
+# LEITURA RAPIDA COM PANDAS
+# ============================================================
+
+def list_sheets(local_copy):
+    xl = pd.ExcelFile(local_copy, engine=EXCEL_ENGINE)
+    try:
+        return list(xl.sheet_names)
+    finally:
+        xl.close()
+
+
+def choose_sheet(local_copy, preferred):
+    sheets = list_sheets(local_copy)
+    print("")
+    print("SHEETS NO FICHEIRO")
+    for s in sheets:
+        print("  - " + s)
+
+    if preferred and preferred in sheets:
+        return preferred
+
+    if not sheets:
+        raise Exception("Workbook sem sheets.")
+
+    return sheets[0]
+
+
+def detect_header_row(pdf_raw):
+    scan = min(len(pdf_raw), HEADER_SCAN_ROWS)
+    best_row = 0
+    best_score = -1
+
+    for r in range(scan):
+        row = pdf_raw.iloc[r]
+        filled = 0
+        textish = 0
+        for v in row.tolist():
+            if v is None or (isinstance(v, float) and pd.isna(v)):
+                continue
+            text = str(v).strip()
+            if text == "" or text.lower() == "nan":
+                continue
+            filled += 1
+            if isinstance(v, str):
+                textish += 1
+        score = filled * 2 + textish
+        if score > best_score:
+            best_score = score
+            best_row = r
+
+    return best_row
+
+
+def forward_fill_headers(headers):
+    filled = []
+    last = ""
+    for h in headers:
+        if h:
+            last = h
+            filled.append(h)
+        else:
+            filled.append(last)
+    return filled
+
+
+def read_excel_fast(local_copy, source_file, preferred_sheet):
+    sheet_name = choose_sheet(local_copy, preferred_sheet)
+    print("Sheet escolhida: " + sheet_name)
+
+    pdf_raw = pd.read_excel(
+        local_copy,
+        sheet_name=sheet_name,
+        header=None,
+        engine=EXCEL_ENGINE,
+        dtype=object,
+    )
+
+    if pdf_raw.empty:
+        raise Exception("Ficheiro / sheet vazia: " + source_file)
+
+    header_row = detect_header_row(pdf_raw)
+    print("Linha de cabecalho detetada (0-based pandas): " + str(header_row))
+    print("Colunas fisicas no Excel: " + str(pdf_raw.shape[1]))
+    print("Linhas brutas lidas: " + "{:,}".format(len(pdf_raw)))
+
+    raw_headers = []
+    for v in pdf_raw.iloc[header_row].tolist():
+        if v is None or (isinstance(v, float) and pd.isna(v)):
+            raw_headers.append("")
+        else:
+            raw_headers.append(decode_cell(v) or "")
+
+    raw_headers = forward_fill_headers(raw_headers)
+
+    print("Cabecalhos ORIGINAIS (x0020 descodificado):")
+    for i, h in enumerate(raw_headers, start=1):
+        print("  [" + str(i).zfill(3) + "] " + (h if h else "<vazio>"))
+
+    clean_headers = uniquify_names([sanitize_column_name(h) for h in raw_headers])
+
+    print("Cabecalhos FINAIS (Delta, antes regras):")
+    for i, orig in enumerate(raw_headers, start=1):
+        print(
+            "  ["
+            + str(i).zfill(3)
+            + "] "
+            + repr(orig)
+            + "  ->  "
+            + clean_headers[i - 1]
+        )
+
+    pdf = pdf_raw.iloc[header_row + 1 :].copy()
+    pdf.columns = clean_headers
+    pdf = pdf.dropna(how="all")
+    pdf = pdf.reset_index(drop=True)
+
+    for c in pdf.columns:
+        if pdf[c].dtype == object:
+            pdf[c] = pdf[c].map(decode_cell)
+
+    pdf = aplicar_regras_negocio(pdf, source_file)
+    pdf = pdf.where(pd.notnull(pdf), None)
+
+    pdf.attrs["sheet_name"] = sheet_name
+    pdf.attrs["header_row"] = header_row + 1
+    return pdf
+
+
+def load_one_file(source_file, preferred_sheet, available_files):
+    if source_file not in available_files:
+        raise Exception(
+            "Ficheiro nao encontrado: "
+            + source_file
+            + ". Nomes no volume: "
+            + str(sorted(available_files.keys()))
+        )
+
+    local_copy = None
+    try:
+        file_path = available_files[source_file]
+        local_copy = copy_to_local_disk(file_path, source_file)
+        print("Copia local: " + local_copy)
+
+        pdf = read_excel_fast(local_copy, source_file, preferred_sheet)
+        print("Linhas lidas: " + "{:,}".format(len(pdf)))
+        print("Campos criados: " + str(len(pdf.columns)))
+
+        if len(pdf) == 0:
+            raise Exception("Ficheiro sem linhas de dados: " + source_file)
+
+        df = spark.createDataFrame(pdf)
+        sheet_name = pdf.attrs.get("sheet_name", "")
+        header_row = pdf.attrs.get("header_row", None)
+
+        df = (
+            df.withColumn("source_file", lit(source_file))
+            .withColumn("source_sheet", lit(sheet_name))
+            .withColumn(
+                "header_row",
+                lit(int(header_row) if header_row is not None else None),
+            )
+            .withColumn("load_timestamp", current_timestamp())
+        )
+        return df, list(pdf.columns), len(pdf)
+    finally:
+        if local_copy and os.path.exists(local_copy):
+            try:
+                os.remove(local_copy)
+            except Exception:
+                pass
+
+
+# ============================================================
+# VALIDACOES DATABRICKS
+# ============================================================
+
+catalog_exists = (
+    spark.sql("SHOW CATALOGS")
+    .filter("catalog = '" + catalog_name + "'")
+    .count()
+)
+
+if catalog_exists == 0:
+    raise Exception("Catalogo nao encontrado: " + catalog_name)
+
+schema_exists = (
+    spark.sql("SHOW SCHEMAS IN " + catalog_name)
+    .filter("databaseName = '" + schema_name + "'")
+    .count()
+)
+
+if schema_exists == 0:
+    raise Exception("Schema nao encontrado: " + schema_name)
+
+print("Catalogo e schema validados.")
+
+
+# ============================================================
+# LISTAR FICHEIROS
+# ============================================================
+
+all_files = dbutils.fs.ls(source_folder)
+available_files = {f.name: f.path for f in all_files}
+
+print("")
+print("=" * 80)
+print("FICHEIROS DISPONIVEIS")
+print("=" * 80)
+for f in sorted(available_files.keys()):
+    print(f)
+
+
+# ============================================================
+# APAGAR DESTINOS E AGRUPAR MAPEAMENTOS
+# ============================================================
+
+drop_target_tables()
+
+by_table = defaultdict(list)
+for item in FILE_MAPPINGS:
+    by_table[item["table"]].append(item)
+
+
+# ============================================================
+# PROCESSAMENTO POR TABELA
+# ============================================================
+
+processed_tables = []
+failed_files = []
+schema_report = []
+
+for target_table, items in by_table.items():
+    print("")
+    print("=" * 80)
+    print("TABELA " + target_table)
+    print("Ficheiros: " + str([i["file"] for i in items]))
+    print("=" * 80)
+
+    spark_frames = []
+    loaded_files = []
+    n_rows_total = 0
+
+    for item in items:
+        source_file = item["file"]
+        preferred_sheet = item.get("preferred_sheet")
+
+        print("")
+        print("-" * 80)
+        print("PROCESSAR " + source_file + " -> " + target_table)
+        print("-" * 80)
+
+        try:
+            df, cols, n_rows = load_one_file(
+                source_file,
+                preferred_sheet,
+                available_files,
+            )
+            spark_frames.append(df)
+            loaded_files.append(source_file)
+            n_rows_total += n_rows
+            schema_report.append(
+                {
+                    "file": source_file,
+                    "table": full_table_name(target_table),
+                    "n_cols": len(cols),
+                    "n_rows": n_rows,
+                    "columns": cols,
+                }
+            )
+        except Exception as e:
+            print("")
+            print("ERRO: " + source_file)
+            print(str(e))
+            print("")
+            failed_files.append((source_file, str(e)))
+
+    if not spark_frames:
+        print("Nenhum ficheiro valido para " + target_table + ". Tabela fica apagada.")
+        continue
+
+    df_out = spark_frames[0]
+    for extra in spark_frames[1:]:
+        df_out = df_out.unionByName(extra, allowMissingColumns=True)
+
+    fqn = full_table_name(target_table)
+    print("")
+    print(
+        "A gravar "
+        + "{:,}".format(n_rows_total)
+        + " linhas de "
+        + str(len(loaded_files))
+        + " ficheiro(s) em "
+        + fqn
+    )
+
+    (
+        df_out.write.format("delta")
+        .mode("overwrite")
+        .option("overwriteSchema", "true")
+        .saveAsTable(fqn)
+    )
+
+    print("Carga concluida: " + fqn)
+    processed_tables.append(fqn)
+
+
+# ============================================================
+# VALIDACAO FINAL
+# ============================================================
+
+print("")
+print("=" * 80)
+print("VALIDACAO FINAL")
+print("=" * 80)
+
+for table in processed_tables:
+    sdf = spark.table(table)
+    total = sdf.count()
+    print("")
+    print("Tabela: " + table)
+    print("Registos: " + "{:,}".format(total))
+    print("Colunas (" + str(len(sdf.columns)) + "): " + str(sdf.columns))
+    display(sdf.limit(20))
+
+print("")
+print("=" * 80)
+print("CAMPOS CRIADOS POR FICHEIRO")
+print("=" * 80)
+
+for item in schema_report:
+    print("")
+    print(item["file"] + " -> " + item["table"])
+    print(
+        "  linhas="
+        + "{:,}".format(item["n_rows"])
+        + "  campos="
+        + str(item["n_cols"])
+    )
+    for c in item["columns"]:
+        print("    - " + c)
+
+print("")
+print("=" * 80)
+print("RESUMO")
+print("=" * 80)
+print("Tabelas carregadas: " + str(len(processed_tables)))
+print("Ficheiros com erro: " + str(len(failed_files)))
+
+if failed_files:
+    for ficheiro, erro in failed_files:
+        print("")
+        print(ficheiro)
+        print(erro)
+    raise Exception("Existem " + str(len(failed_files)) + " ficheiros com erro.")
+
+print("")
+print("CARGA CONCLUIDA COM SUCESSO")
