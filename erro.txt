@@ -1,0 +1,27 @@
+[CONFIG_NOT_AVAILABLE.WITHOUT_SUGGESTION] Configuration spark.sql.execution.arrow.pyspark.enabled is not available. SQLSTATE: 42K0I
+File <command-7975846342996943>, line 88
+     81 os.makedirs(LOCAL_TMP, exist_ok=True)
+     84 # ============================================================
+     85 # SPARK — configs que realmente importam neste job
+     86 # ============================================================
+---> 88 spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
+     89 spark.conf.set("spark.sql.execution.arrow.pyspark.fallback.enabled", "true")
+     90 spark.conf.set("spark.sql.parquet.mergeSchema", "true")
+File /databricks/python/lib/python3.12/site-packages/pyspark/sql/connect/client/core.py:2458, in SparkConnectClient._handle_rpc_error(self, rpc_error)
+   2454             logger.debug(f"Received ErrorInfo: {info}")
+   2456             self._handle_rpc_error_with_error_info(info, status.message, status_code)  # EDGE
+-> 2458             raise convert_exception(
+   2459                 info,
+   2460                 status.message,
+   2461                 self._fetch_enriched_error(info),
+   2462                 self._display_server_stack_trace(),
+   2463                 status_code,
+   2464             ) from None
+   2466     raise SparkConnectGrpcException(
+   2467         message=status.message,
+   2468         sql_state=ErrorCode.CLIENT_UNEXPECTED_MISSING_SQL_STATE,  # EDGE
+   2469         grpc_status_code=status_code,
+   2470     ) from None
+   2471 else:
+
+
