@@ -110,5 +110,3 @@ A gravar 4,400,589 linhas de 6 ficheiro(s) em agpt_insurance_dv_catalog.wkb_bus_
 
 
 
-AttributeError: module 'pyspark.sql.functions' has no attribute 'try_cast'
-[Trace ID: 00-3ca387d12a7eaaac36ac07e0398b34df-01a74033a9d8e61c-00]
