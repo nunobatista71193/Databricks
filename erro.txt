@@ -19,94 +19,49 @@ Ficheiros: ['WORK_sim_ags_final.xlsx', 'WORK_sim_ags_final_2025.xlsx', 'WORK_sim
 --------------------------------------------------------------------------------
 PROCESSAR WORK_sim_ags_final.xlsx -> ags_overview
 --------------------------------------------------------------------------------
-  [tempo] copia local WORK_sim_ags_final.xlsx: 0.9s
-SHEETS: SIM_AGS_FINAL
-Sheet escolhida: SIM_AGS_FINAL
-  [tempo] read_excel WORK_sim_ags_final.xlsx: 108.3s
-Header row=0 colunas=69 linhas=704,944
-  [tempo] decode colunas object: 4.1s
-Regra AGS aplicada: CDPOSTAL -> CODIGO_POSTAL
-  [tempo] cast staging para string: 15.8s
-Linhas lidas: 704,943  campos: 69
-  [tempo] to_parquet WORK_sim_ags_final.xlsx: 8.0s
-Parquet staging: /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/ags_overview/WORK_sim_ags_final.parquet
+SKIP Excel: parquet ja existe -> /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/ags_overview/WORK_sim_ags_final.parquet
+  retoma parquet: 704,943 linhas
 
 --------------------------------------------------------------------------------
 PROCESSAR WORK_sim_ags_final_2025.xlsx -> ags_overview
 --------------------------------------------------------------------------------
-  [tempo] copia local WORK_sim_ags_final_2025.xlsx: 1.0s
-SHEETS: QUERY_FOR_SIM_AGS_FINAL_0000
-Sheet escolhida: QUERY_FOR_SIM_AGS_FINAL_0000
-  [tempo] read_excel WORK_sim_ags_final_2025.xlsx: 162.6s
-Header row=0 colunas=69 linhas=913,295
-  [tempo] decode colunas object: 4.8s
-Regra AGS aplicada: CDPOSTAL -> CODIGO_POSTAL
-  [tempo] cast staging para string: 20.0s
-Linhas lidas: 913,294  campos: 69
-  [tempo] to_parquet WORK_sim_ags_final_2025.xlsx: 17.8s
-Parquet staging: /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/ags_overview/WORK_sim_ags_final_2025.parquet
+SKIP Excel: parquet ja existe -> /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/ags_overview/WORK_sim_ags_final_2025.parquet
+  retoma parquet: 913,294 linhas
 
 --------------------------------------------------------------------------------
 PROCESSAR WORK_sim_ags_final_2024.xlsx -> ags_overview
 --------------------------------------------------------------------------------
-  [tempo] copia local WORK_sim_ags_final_2024.xlsx: 1.5s
-SHEETS: QUERY_FOR_SIM_AGS_FINAL_0001
-Sheet escolhida: QUERY_FOR_SIM_AGS_FINAL_0001
-  [tempo] read_excel WORK_sim_ags_final_2024.xlsx: 272.8s
-Header row=0 colunas=69 linhas=925,370
-  [tempo] decode colunas object: 6.9s
-Regra AGS aplicada: CDPOSTAL -> CODIGO_POSTAL
-  [tempo] cast staging para string: 22.9s
-Linhas lidas: 925,369  campos: 69
-  [tempo] to_parquet WORK_sim_ags_final_2024.xlsx: 21.7s
-Parquet staging: /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/ags_overview/WORK_sim_ags_final_2024.parquet
+SKIP Excel: parquet ja existe -> /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/ags_overview/WORK_sim_ags_final_2024.parquet
+  retoma parquet: 925,369 linhas
 
 --------------------------------------------------------------------------------
 PROCESSAR WORK_sim_ags_final_2023.xlsx -> ags_overview
 --------------------------------------------------------------------------------
-  [tempo] copia local WORK_sim_ags_final_2023.xlsx: 1.3s
-SHEETS: QUERY_FOR_SIM_AGS_FINAL_0002
-Sheet escolhida: QUERY_FOR_SIM_AGS_FINAL_0002
-  [tempo] read_excel WORK_sim_ags_final_2023.xlsx: 238.7s
-Header row=0 colunas=69 linhas=795,402
-  [tempo] decode colunas object: 6.2s
-Regra AGS aplicada: CDPOSTAL -> CODIGO_POSTAL
-  [tempo] cast staging para string: 52.3s
-Linhas lidas: 795,401  campos: 69
-  [tempo] to_parquet WORK_sim_ags_final_2023.xlsx: 162.0s
-Parquet staging: /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/ags_overview/WORK_sim_ags_final_2023.parquet
+SKIP Excel: parquet ja existe -> /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/ags_overview/WORK_sim_ags_final_2023.parquet
+  retoma parquet: 795,401 linhas
 
 --------------------------------------------------------------------------------
 PROCESSAR WORK_sim_ags_final_2022.xlsx -> ags_overview
 --------------------------------------------------------------------------------
-  [tempo] copia local WORK_sim_ags_final_2022.xlsx: 0.9s
-SHEETS: QUERY_FOR_SIM_AGS_FINAL_0003
-Sheet escolhida: QUERY_FOR_SIM_AGS_FINAL_0003
-  [tempo] read_excel WORK_sim_ags_final_2022.xlsx: 189.0s
-Header row=0 colunas=69 linhas=593,786
-  [tempo] decode colunas object: 7.6s
-Regra AGS aplicada: CDPOSTAL -> CODIGO_POSTAL
-  [tempo] cast staging para string: 21.6s
-Linhas lidas: 593,785  campos: 69
-  [tempo] to_parquet WORK_sim_ags_final_2022.xlsx: 15.4s
-Parquet staging: /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/ags_overview/WORK_sim_ags_final_2022.parquet
+SKIP Excel: parquet ja existe -> /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/ags_overview/WORK_sim_ags_final_2022.parquet
+  retoma parquet: 593,785 linhas
 
 --------------------------------------------------------------------------------
 PROCESSAR WORK_sim_ags_final_2021.xlsx -> ags_overview
 --------------------------------------------------------------------------------
-  [tempo] copia local WORK_sim_ags_final_2021.xlsx: 0.9s
-SHEETS: QUERY_FOR_SIM_AGS_FINAL_0004
-Sheet escolhida: QUERY_FOR_SIM_AGS_FINAL_0004
-  [tempo] read_excel WORK_sim_ags_final_2021.xlsx: 142.9s
-Header row=0 colunas=69 linhas=467,798
-  [tempo] decode colunas object: 2.2s
-Regra AGS aplicada: CDPOSTAL -> CODIGO_POSTAL
-  [tempo] cast staging para string: 10.0s
-Linhas lidas: 467,797  campos: 69
-  [tempo] to_parquet WORK_sim_ags_final_2021.xlsx: 14.4s
-Parquet staging: /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/ags_overview/WORK_sim_ags_final_2021.parquet
+SKIP Excel: parquet ja existe -> /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/ags_overview/WORK_sim_ags_final_2021.parquet
+  retoma parquet: 467,797 linhas
 A gravar 4,400,589 linhas de 6 ficheiro(s) em agpt_insurance_dv_catalog.wkb_bus_operations_price.ags_overview
-  [tempo] spark.read.parquet + tipos + replace table ags_overview: 8.1s
+Tipos aplicados:
+  decimal(18,2): ['vt_valor_seguro', 'vt_pesobruto', 'vt_tara', 'vt_racio_peso_potencia', 'premio_total', 'QUA_PREMIO_2', 'PREMIO_FRAC']
+  int:           ['ano_sim', 'anomes_sim', 'semana_sim', 'confinamento', 'diff_dias_sim_risco', 'diff_dias_sim_conversao', 'vt_CC', 'vt_CV', 'CVE_CAIXA', 'CVE_PORTAS', 'CVE_ZONA_DP', 'CVE_ZONA_RC', 'vt_num_lugares', 'vt_anosviatura', 'num_sin_ult_5anos', 'num_anos_sem_sinistros', 'num_sin_ult_ano', 'NUM_SINISTROS_ULT_5_ANOS', 'num_anos_com_seguro', 'idade_condutor', 'anos_carta', 'CVE_BM_INICIAL', 'NUM_ISP_DESC', 'header_row']
+  flag->int:     ['flag_simulacao', 'flag_conversao', 'flag_promocode_SD', 'ALARME_DE_SEGURANCA', 'APOIO_ESTACIONAMENTO', 'MELHORIA_VISIBILIDADE', 'CONTROLE_CONDUCAO', 'CONTROLE_TRAVAGEM', 'flag_premio', 'target_ageas', 'Parc_PO_Motor20']
+  string:        28 colunas
+Tabela nao existe (nada a limpar): agpt_insurance_dv_catalog.wkb_bus_operations_price.ags_overview
+SQL: CREATE OR REPLACE TABLE `agpt_insurance_dv_catalog`.`wkb_bus_operations_price`.`ags_overview` USING DELTA AS SELECT * FROM _tmp_load_ags_overview
+CREATE OR REPLACE falhou, fallback saveAsTable: [CAST_INVALID_INPUT] The value '0.' of the type "STRING" cannot be cast to "BIGINT" because it is malformed. Correct the value as per the syntax, or change its target type. Use `try_cast` to tolerate malformed input and 
+  [tempo] spark.read.parquet + tipos + replace table ags_overview: 41.2s
 
 
 
+[CAST_INVALID_INPUT] The value '0.' of the type "STRING" cannot be cast to "BIGINT" because it is malformed. Correct the value as per the syntax, or change its target type. Use `try_cast` to tolerate malformed input and return NULL instead. SQLSTATE: 22018
