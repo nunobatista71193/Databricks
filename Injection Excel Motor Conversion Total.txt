@@ -46,7 +46,6 @@ ensure_pkg("python_calamine", "python-calamine")
 
 catalog_name = "agpt_insurance_dv_catalog"
 schema_name = "wkb_bus_operations_price"
-
 source_folder = "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/01_raw/"
 staging_folder = "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/"
 
@@ -69,6 +68,8 @@ FILE_MAPPINGS = [
 HEADER_SCAN_ROWS = 15
 CAST_ALL_TO_STRING = True
 VERBOSE_HEADERS = False
+RESET_STAGING_ALWAYS = False
+SKIP_EXISTING_PARQUET = True
 FORCE_DECIMAL_COLS = set()
 FORCE_INT_COLS = set()
 FORCE_STRING_COLS = set()
@@ -269,7 +270,6 @@ EXACT_TYPES = {
     "vt_racio_peso_potencia": "decimal", "premio_total": "decimal",
     "qua_premio_2": "decimal", "premio_frac": "decimal",
 }
-
 STRING_EXACT = {
     "codigo_postal", "cdpostal", "nif", "nipc", "niss", "nic",
     "matricula", "email", "mail", "telefone", "telemovel",
@@ -478,7 +478,8 @@ def drop_target_tables():
 
 def reset_staging():
     dest = to_local_path(staging_folder)
-    if os.path.exists(dest):
+    if RESET_STAGING_ALWAYS and os.path.exists(dest):
+        log("A limpar staging: " + dest)
         shutil.rmtree(dest, ignore_errors=True)
     os.makedirs(dest, exist_ok=True)
     for item in FILE_MAPPINGS:
@@ -548,15 +549,16 @@ def read_excel_fast(local_copy, source_file, preferred_sheet):
     if pdf_raw.empty:
         raise Exception("Ficheiro / sheet vazia: " + source_file)
     header_row = detect_header_row(pdf_raw)
-    log("Header row=" + str(header_row) + " colunas=" + str(pdf_raw.shape[1]) + " linhas_brutas=" + "{:,}".format(len(pdf_raw)))
+    log(
+        "Header row=" + str(header_row)
+        + " colunas=" + str(pdf_raw.shape[1])
+        + " linhas_brutas=" + "{:,}".format(len(pdf_raw))
+    )
     raw_headers = []
     for v in pdf_raw.iloc[header_row].tolist():
         raw_headers.append("" if v is None or (isinstance(v, float) and pd.isna(v)) else (decode_cell(v) or ""))
     raw_headers = forward_fill_headers(raw_headers)
     clean_headers = uniquify_names([sanitize_column_name(h) for h in raw_headers])
-    if VERBOSE_HEADERS:
-        for i, orig in enumerate(raw_headers, start=1):
-            log("  [" + str(i).zfill(3) + "] " + repr(orig) + " -> " + clean_headers[i - 1])
     pdf = pdf_raw.iloc[header_row + 1 :].copy()
     del pdf_raw
     pdf.columns = clean_headers
@@ -587,6 +589,20 @@ def parquet_path_for(target_table, source_file):
 def stage_one_file(source_file, preferred_sheet, target_table, available_files):
     if source_file not in available_files:
         raise Exception("Ficheiro nao encontrado: " + source_file)
+
+    out_path = parquet_path_for(target_table, source_file)
+    if SKIP_EXISTING_PARQUET and os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+        log("SKIP Excel: parquet ja existe -> " + out_path)
+        try:
+            import pyarrow.parquet as pq
+            pf = pq.ParquetFile(out_path)
+            n_rows = pf.metadata.num_rows
+            cols = [c for c in pf.schema_arrow.names if c not in ("source_file", "source_sheet", "header_row")]
+            log("  retoma parquet: " + "{:,}".format(n_rows) + " linhas")
+            return out_path, cols, n_rows, "", None
+        except Exception as exc:
+            log("Parquet existente ilegivel, a reprocessar Excel: " + str(exc).split("\n")[0][:180])
+
     local_copy = None
     try:
         with timed("copia local " + source_file):
@@ -602,7 +618,6 @@ def stage_one_file(source_file, preferred_sheet, target_table, available_files):
         pdf["source_file"] = source_file
         pdf["source_sheet"] = sheet_name
         pdf["header_row"] = int(header_row) if header_row is not None else None
-        out_path = parquet_path_for(target_table, source_file)
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         if os.path.exists(out_path):
             os.remove(out_path)
