@@ -1,5 +1,6 @@
 # ============================================================
 # INGESTAO RESUMO AGS / OCS / SD OVERVIEW
+# OVERWRITE COMPLETO — versao otimizada + tipos
 # ============================================================
 
 import gc
@@ -15,7 +16,7 @@ from collections import defaultdict
 
 import pandas as pd
 from pyspark.sql import functions as F
-from pyspark.sql.types import DecimalType, IntegerType, StringType
+from pyspark.sql.types import StringType
 
 
 def log(msg=""):
@@ -45,6 +46,7 @@ ensure_pkg("python_calamine", "python-calamine")
 
 catalog_name = "agpt_insurance_dv_catalog"
 schema_name = "wkb_bus_operations_price"
+
 source_folder = "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/01_raw/"
 staging_folder = "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/"
 
@@ -95,6 +97,7 @@ def try_spark_conf(key, value):
     except Exception as exc:
         log("Conf ignorada (" + key + "): " + str(exc).split("\n")[0][:180])
         return False
+
 
 try_spark_conf("spark.sql.shuffle.partitions", "16")
 
@@ -222,7 +225,13 @@ def aplicar_regras_negocio(pdf, source_file):
                 pdf = pdf.rename(columns={alvo: "CODIGO_POSTAL"})
                 alvo = "CODIGO_POSTAL"
             pdf[alvo] = normalizar_codigo_postal_series(pdf[alvo])
-            log("Regra OCS: " + "{:,}".format(int(pdf[alvo].notna().sum())) + " / " + "{:,}".format(len(pdf)))
+            log(
+                "Regra OCS aplicada em CODIGO_POSTAL: "
+                + "{:,}".format(int(pdf[alvo].notna().sum()))
+                + " validos / "
+                + "{:,}".format(len(pdf))
+                + " linhas"
+            )
     return pdf
 
 
@@ -261,10 +270,28 @@ EXACT_TYPES = {
     "qua_premio_2": "decimal", "premio_frac": "decimal",
 }
 
-STRING_EXACT = {"codigo_postal", "cdpostal", "nif", "nipc", "matricula", "email", "apolice", "source_file", "source_sheet"}
-STRING_TOKENS = ("codigo_postal", "matricula", "email", "morada", "localidade", "concelho", "distrito", "marca", "modelo", "consultor", "promocode", "segmento")
-DECIMAL_TOKENS = ("premio", "valor_seguro", "franquia", "taxa", "comissao", "pesobruto", "tara", "racio", "preco", "capital")
-INT_TOKENS = ("idade_condutor", "anos_sem_sinistro", "anos_com_seguro", "anos_carta", "num_sin", "num_anos", "lugares")
+STRING_EXACT = {
+    "codigo_postal", "cdpostal", "nif", "nipc", "niss", "nic",
+    "matricula", "email", "mail", "telefone", "telemovel",
+    "iban", "apolice", "source_file", "source_sheet",
+}
+STRING_TOKENS = (
+    "codigo_postal", "matricula", "email", "morada", "endereco",
+    "localidade", "concelho", "distrito", "freguesia", "marca",
+    "modelo", "descricao", "observ", "comentario", "notas",
+    "telefone", "telemovel", "consultor", "promocode", "segmento",
+)
+DECIMAL_TOKENS = (
+    "premio", "valor_seguro", "franquia", "taxa", "comissao",
+    "desconto", "agravamento", "iuc", "isv", "pesobruto", "tara",
+    "racio", "preco", "capital",
+)
+INT_TOKENS = (
+    "idade_condutor", "idade_tomador", "anos_sem_sinistro",
+    "anos_com_seguro", "anos_carta", "anos_habilit", "n_sinistro",
+    "num_sin", "num_anos", "cilindrada", "lugares", "ano_constru",
+    "ano_fabric", "ano_matric", "bonus_malus",
+)
 FLAG_PREFIXES = ("flag_", "flg_", "ind_")
 
 
@@ -309,18 +336,12 @@ def _to_numeric_string(colname):
     return F.when(s.isin("", ".", "-", "-."), F.lit(None)).otherwise(s)
 
 
-def _try_int(colname):
-    return F.try_cast(F.regexp_replace(_to_numeric_string(colname), r"\.0+$", ""), IntegerType())
+def _sql_ident(colname):
+    return "`" + str(colname).replace("`", "") + "`"
 
 
-def _try_flag(colname):
-    raw = F.regexp_replace(F.upper(F.trim(F.col(colname).cast("string"))), "[\u00a0 ]", "")
-    mapped = (
-        F.when(raw.isin("1", "1.0", "S", "SIM", "Y", "YES", "TRUE", "T", "X", "VERDADEIRO"), F.lit(1))
-        .when(raw.isin("0", "0.0", "N", "NAO", "NÃO", "NO", "FALSE", "F", "FALSO", ""), F.lit(0))
-        .otherwise(F.lit(None))
-    )
-    return F.coalesce(mapped, _try_int(colname)).cast(IntegerType())
+def _sql_try_cast(colname, type_sql):
+    return F.expr("try_cast(" + _sql_ident(colname) + " as " + type_sql + ")")
 
 
 def aplicar_tipos_spark(df):
@@ -331,19 +352,30 @@ def aplicar_tipos_spark(df):
             continue
         if kind == "decimal":
             decimais.append(c)
-            df = df.withColumn(c, F.try_cast(_to_numeric_string(c), DecimalType(18, 2)))
+            df = df.withColumn(c, _to_numeric_string(c))
+            df = df.withColumn(c, _sql_try_cast(c, "decimal(18,2)"))
         elif kind == "flag":
             flags.append(c)
-            df = df.withColumn(c, _try_flag(c))
+            raw = F.upper(F.trim(F.col(c).cast("string")))
+            raw = F.regexp_replace(raw, "[\u00a0 ]", "")
+            mapped = (
+                F.when(raw.isin("1", "1.0", "S", "SIM", "Y", "YES", "TRUE", "T", "X", "VERDADEIRO"), F.lit(1))
+                .when(raw.isin("0", "0.0", "N", "NAO", "NÃO", "NO", "FALSE", "F", "FALSO", ""), F.lit(0))
+                .otherwise(F.lit(None))
+            )
+            numeric = F.regexp_replace(_to_numeric_string(c), r"\.0+$", "")
+            df = df.withColumn(c, F.coalesce(mapped, numeric))
+            df = df.withColumn(c, _sql_try_cast(c, "int"))
         elif kind == "int":
             inteiros.append(c)
-            df = df.withColumn(c, _try_int(c))
+            df = df.withColumn(c, F.regexp_replace(_to_numeric_string(c), r"\.0+$", ""))
+            df = df.withColumn(c, _sql_try_cast(c, "int"))
         else:
             textos.append(c)
             if c not in META_COLS:
                 df = df.withColumn(c, F.col(c).cast(StringType()))
     if "header_row" in df.columns:
-        df = df.withColumn("header_row", F.try_cast(F.col("header_row"), IntegerType()))
+        df = df.withColumn("header_row", _sql_try_cast("header_row", "int"))
     log("Tipos aplicados:")
     log("  decimal(18,2): " + str(decimais))
     log("  int:           " + str(inteiros))
@@ -397,7 +429,8 @@ def table_exists(table):
 
 
 def wipe_table(table):
-    fqn, qn = full_table_name(table), quoted_table_name(table)
+    fqn = full_table_name(table)
+    qn = quoted_table_name(table)
     if not table_exists(table):
         log("Tabela nao existe (nada a limpar): " + fqn)
         return
@@ -417,11 +450,13 @@ def wipe_table(table):
     if table_exists(table):
         for stmt in ("DELETE FROM " + qn, "TRUNCATE TABLE " + qn):
             try:
+                log("SQL: " + stmt)
                 spark.sql(stmt)
             except Exception as exc:
                 log("Limpeza alternativa falhou: " + str(exc).split("\n")[0][:220])
     if table_exists(table):
         restantes = spark.table(fqn).count()
+        log("Tabela ainda existe apos limpeza. Linhas restantes: " + "{:,}".format(restantes))
         if restantes > 0:
             raise Exception("Nao foi possivel limpar " + fqn + " (" + "{:,}".format(restantes) + " linhas).")
     else:
@@ -507,16 +542,21 @@ def read_excel_fast(local_copy, source_file, preferred_sheet):
     sheet_name = choose_sheet(local_copy, preferred_sheet)
     log("Sheet escolhida: " + sheet_name)
     with timed("read_excel " + source_file):
-        pdf_raw = pd.read_excel(local_copy, sheet_name=sheet_name, header=None, engine=EXCEL_ENGINE, dtype=object)
+        pdf_raw = pd.read_excel(
+            local_copy, sheet_name=sheet_name, header=None, engine=EXCEL_ENGINE, dtype=object
+        )
     if pdf_raw.empty:
         raise Exception("Ficheiro / sheet vazia: " + source_file)
     header_row = detect_header_row(pdf_raw)
-    log("Header row=" + str(header_row) + " colunas=" + str(pdf_raw.shape[1]) + " linhas=" + "{:,}".format(len(pdf_raw)))
+    log("Header row=" + str(header_row) + " colunas=" + str(pdf_raw.shape[1]) + " linhas_brutas=" + "{:,}".format(len(pdf_raw)))
     raw_headers = []
     for v in pdf_raw.iloc[header_row].tolist():
         raw_headers.append("" if v is None or (isinstance(v, float) and pd.isna(v)) else (decode_cell(v) or ""))
     raw_headers = forward_fill_headers(raw_headers)
     clean_headers = uniquify_names([sanitize_column_name(h) for h in raw_headers])
+    if VERBOSE_HEADERS:
+        for i, orig in enumerate(raw_headers, start=1):
+            log("  [" + str(i).zfill(3) + "] " + repr(orig) + " -> " + clean_headers[i - 1])
     pdf = pdf_raw.iloc[header_row + 1 :].copy()
     del pdf_raw
     pdf.columns = clean_headers
@@ -552,11 +592,13 @@ def stage_one_file(source_file, preferred_sheet, target_table, available_files):
         with timed("copia local " + source_file):
             local_copy = copy_to_local_disk(available_files[source_file], source_file)
         pdf = read_excel_fast(local_copy, source_file, preferred_sheet)
-        n_rows, cols = len(pdf), list(pdf.columns)
+        n_rows = len(pdf)
+        cols = list(pdf.columns)
         log("Linhas lidas: " + "{:,}".format(n_rows) + "  campos: " + str(len(cols)))
         if n_rows == 0:
             raise Exception("Ficheiro sem linhas de dados: " + source_file)
-        sheet_name, header_row = pdf.attrs.get("sheet_name", ""), pdf.attrs.get("header_row", None)
+        sheet_name = pdf.attrs.get("sheet_name", "")
+        header_row = pdf.attrs.get("header_row", None)
         pdf["source_file"] = source_file
         pdf["source_sheet"] = sheet_name
         pdf["header_row"] = int(header_row) if header_row is not None else None
@@ -585,6 +627,7 @@ log("Catalogo e schema validados.")
 
 available_files = {f.name: f.path for f in dbutils.fs.ls(source_folder)}
 log("Ficheiros no volume: " + str(len(available_files)))
+
 drop_target_tables()
 reset_staging()
 
@@ -615,7 +658,13 @@ for target_table, items in by_table.items():
             parquet_files.append(out_path)
             loaded_files.append(source_file)
             n_rows_total += n_rows
-            schema_report.append({"file": source_file, "table": full_table_name(target_table), "n_cols": len(cols), "n_rows": n_rows, "columns": cols})
+            schema_report.append({
+                "file": source_file,
+                "table": full_table_name(target_table),
+                "n_cols": len(cols),
+                "n_rows": n_rows,
+                "columns": cols,
+            })
         except Exception as e:
             log("ERRO: " + source_file)
             log(str(e))
@@ -656,6 +705,7 @@ for table in processed_tables:
     log("")
     log("Tabela: " + table)
     log("Registos: " + "{:,}".format(sdf.count()))
+    log("Schema:")
     for field in sdf.schema.fields:
         log("  - " + field.name + " : " + field.dataType.simpleString())
     display(sdf.limit(20))
@@ -666,6 +716,7 @@ log("Ficheiros com erro: " + str(len(failed_files)))
 log("Tempo total: " + "{:.1f}s".format(time.time() - t_job))
 if failed_files:
     for ficheiro, erro in failed_files:
-        log(ficheiro); log(erro)
+        log(ficheiro)
+        log(erro)
     raise Exception("Existem " + str(len(failed_files)) + " ficheiros com erro.")
 log("CARGA CONCLUIDA COM SUCESSO")
