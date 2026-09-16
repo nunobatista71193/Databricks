@@ -63,5 +63,4 @@ CREATE OR REPLACE falhou, fallback saveAsTable: [CAST_INVALID_INPUT] The value '
   [tempo] spark.read.parquet + tipos + replace table ags_overview: 41.2s
 
 
-
 [CAST_INVALID_INPUT] The value '0.' of the type "STRING" cannot be cast to "BIGINT" because it is malformed. Correct the value as per the syntax, or change its target type. Use `try_cast` to tolerate malformed input and return NULL instead. SQLSTATE: 22018
