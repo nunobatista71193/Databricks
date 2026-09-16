@@ -19,11 +19,7 @@
       "as": "DeltaPP"
     },
     {
-      "calculate": "max(datum.RollOutPct, datum.AprPct)",
-      "as": "MaxBarValue"
-    },
-    {
-      "calculate": "datum.MaxBarValue + 5",
+      "calculate": "max(datum.RollOutPct, datum.AprPct) + 2.2",
       "as": "BulletY"
     },
     {
@@ -39,7 +35,7 @@
       "as": "DeltaLabel"
     },
     {
-      "calculate": "datum.DeltaPP >= 0 ? '#6F9A50' : '#C75B5B'",
+      "calculate": "datum.DeltaPP >= 0 ? '#729B53' : '#C96767'",
       "as": "DeltaColor"
     }
   ],
@@ -49,9 +45,9 @@
       "mark": {
         "type": "bar",
         "color": "#A9DAD8",
-        "width": 24,
-        "cornerRadiusTopLeft": 3,
-        "cornerRadiusTopRight": 3
+        "width": 25,
+        "cornerRadiusTopLeft": 2,
+        "cornerRadiusTopRight": 2
       },
       "encoding": {
         "x": {
@@ -63,13 +59,13 @@
             "labelFontSize": 8,
             "labelAngle": 0,
             "labelLimit": 70,
-            "labelPadding": 6,
+            "labelPadding": 1,
             "domain": false,
             "ticks": false
           }
         },
         "xOffset": {
-          "value": -13
+          "value": -10
         },
         "y": {
           "field": "RollOutPct",
@@ -78,7 +74,7 @@
           "scale": {
             "zero": true,
             "nice": false,
-            "padding": 36
+            "padding": 22
           }
         }
       }
@@ -87,9 +83,9 @@
       "mark": {
         "type": "bar",
         "color": "#9C1F5D",
-        "width": 24,
-        "cornerRadiusTopLeft": 3,
-        "cornerRadiusTopRight": 3
+        "width": 25,
+        "cornerRadiusTopLeft": 2,
+        "cornerRadiusTopRight": 2
       },
       "encoding": {
         "x": {
@@ -98,7 +94,7 @@
           "sort": ["Total", "AGE", "MM", "Private"]
         },
         "xOffset": {
-          "value": 13
+          "value": 10
         },
         "y": {
           "field": "AprPct",
@@ -107,7 +103,7 @@
           "scale": {
             "zero": true,
             "nice": false,
-            "padding": 36
+            "padding": 22
           }
         }
       }
@@ -115,10 +111,10 @@
     {
       "mark": {
         "type": "text",
-        "dy": -5,
+        "dy": -4,
         "fontSize": 8,
         "fontWeight": "normal",
-        "color": "#333333",
+        "color": "#2E2E2E",
         "align": "center",
         "baseline": "bottom"
       },
@@ -129,7 +125,7 @@
           "sort": ["Total", "AGE", "MM", "Private"]
         },
         "xOffset": {
-          "value": -13
+          "value": -10
         },
         "y": {
           "field": "RollOutPct",
@@ -143,10 +139,10 @@
     {
       "mark": {
         "type": "text",
-        "dy": -5,
+        "dy": -4,
         "fontSize": 8,
         "fontWeight": "normal",
-        "color": "#333333",
+        "color": "#2E2E2E",
         "align": "center",
         "baseline": "bottom"
       },
@@ -157,7 +153,7 @@
           "sort": ["Total", "AGE", "MM", "Private"]
         },
         "xOffset": {
-          "value": 13
+          "value": 10
         },
         "y": {
           "field": "AprPct",
@@ -171,14 +167,15 @@
     {
       "mark": {
         "type": "circle",
-        "size": 700,
-        "opacity": 0.94
+        "size": 520,
+        "opacity": 0.95
       },
       "encoding": {
         "x": {
           "field": "Entidade",
           "type": "nominal",
-          "sort": ["Total", "AGE", "MM", "Private"]
+          "sort": ["Total", "AGE", "MM", "Private"],
+          "bandPosition": 0.5
         },
         "y": {
           "field": "BulletY",
@@ -195,7 +192,7 @@
     {
       "mark": {
         "type": "text",
-        "fontSize": 8,
+        "fontSize": 7,
         "fontWeight": "bold",
         "color": "white",
         "align": "center",
@@ -205,7 +202,8 @@
         "x": {
           "field": "Entidade",
           "type": "nominal",
-          "sort": ["Total", "AGE", "MM", "Private"]
+          "sort": ["Total", "AGE", "MM", "Private"],
+          "bandPosition": 0.5
         },
         "y": {
           "field": "BulletY",
