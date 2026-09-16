@@ -16,7 +16,94 @@
         "labelFontSize": 10,
         "labelFontWeight": "normal",
         "labelAngle": 0,
-        "labelLimit": 80,
+        "labelLimit": 80,{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "data": { "name": "dataset" },
+  "width": 450,
+  "height": 280,
+
+  "transform": [
+    {
+      "fold": ["Rollout", "Blade Y"],
+      "as": ["Serie", "Valor"]
+    }
+  ],
+
+  "encoding": {
+    "x": {
+      "field": "Marca",
+      "type": "nominal",
+      "sort": ["AGEAS", "ALLIANZ", "LLM", "Private"],
+      "axis": {
+        "title": null,
+        "labelFontSize": 9,
+        "labelAngle": 0,
+        "labelLimit": 90,
+        "labelPadding": 8
+      }
+    },
+    "xOffset": {
+      "field": "Serie"
+    },
+    "y": {
+      "field": "Valor",
+      "type": "quantitative",
+      "axis": null
+    },
+    "color": {
+      "field": "Serie",
+      "type": "nominal",
+      "scale": {
+        "domain": ["Rollout", "Blade Y"],
+        "range": ["#9AD9DB", "#C21878"]
+      },
+      "legend": {
+        "title": null,
+        "orient": "top",
+        "direction": "horizontal",
+        "labelFontSize": 10
+      }
+    }
+  },
+
+  "layer": [
+    {
+      "mark": {
+        "type": "bar",
+        "width": 28,
+        "cornerRadiusTopLeft": 6,
+        "cornerRadiusTopRight": 6
+      }
+    },
+    {
+      "mark": {
+        "type": "text",
+        "dy": -10,
+        "fontSize": 12,
+        "color": "#222"
+      },
+      "encoding": {
+        "text": {
+          "field": "Valor",
+          "type": "quantitative",
+          "format": ".0f"
+        }
+      }
+    }
+  ],
+
+  "config": {
+    "view": {
+      "stroke": null
+    },
+    "axis": {
+      "grid": false,
+      "domain": false,
+      "ticks": false
+    }
+  }
+}
+
         "labelPadding": 8
       }
     }
