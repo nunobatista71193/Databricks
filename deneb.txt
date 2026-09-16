@@ -1,8 +1,6 @@
 {
   "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
-  "data": {
-    "name": "dataset"
-  },
+  "data": { "name": "dataset" },
 
   "width": 350,
   "height": 160,
@@ -21,7 +19,7 @@
       "as": "DeltaPP"
     },
     {
-      "calculate": "max(datum.RollOutPct, datum.AprPct) + 2.5",
+      "calculate": "max(datum.RollOutPct, datum.AprPct) + 3",
       "as": "BulletY"
     },
     {
@@ -37,7 +35,7 @@
       "as": "DeltaLabel"
     },
     {
-      "calculate": "datum.DeltaPP >= 0 ? '#729B53' : '#C96767'",
+      "calculate": "datum.DeltaPP >= 0 ? '#8BB174' : '#C85C5C'",
       "as": "DeltaColor"
     }
   ],
@@ -46,10 +44,10 @@
     {
       "mark": {
         "type": "bar",
-        "color": "#A9DAD8",
-        "width": 28,
-        "cornerRadiusTopLeft": 2,
-        "cornerRadiusTopRight": 2
+        "color": "#BFE3E0",
+        "width": 16,
+        "cornerRadiusTopLeft": 3,
+        "cornerRadiusTopRight": 3
       },
       "encoding": {
         "x": {
@@ -59,49 +57,29 @@
           "axis": {
             "title": null,
             "labelFontSize": 8,
-            "labelFontWeight": "normal",
             "labelAngle": 0,
             "labelLimit": 70,
-            "labelPadding": 1,
+            "labelPadding": 6,
             "domain": false,
             "ticks": false
           }
         },
-        "xOffset": {
-          "value": -11
-        },
+        "xOffset": { "value": -10 },
         "y": {
           "field": "RollOutPct",
           "type": "quantitative",
           "axis": null,
-          "scale": {
-            "zero": true,
-            "nice": false,
-            "padding": 26
-          }
-        },
-        "tooltip": [
-          {
-            "field": "Entidade",
-            "type": "nominal",
-            "title": "Entidade"
-          },
-          {
-            "field": "RollOutPct",
-            "type": "quantitative",
-            "title": "Roll Out (%)",
-            "format": ".1f"
-          }
-        ]
+          "scale": { "zero": true }
+        }
       }
     },
     {
       "mark": {
         "type": "bar",
         "color": "#9C1F5D",
-        "width": 28,
-        "cornerRadiusTopLeft": 2,
-        "cornerRadiusTopRight": 2
+        "width": 16,
+        "cornerRadiusTopLeft": 3,
+        "cornerRadiusTopRight": 3
       },
       "encoding": {
         "x": {
@@ -109,43 +87,21 @@
           "type": "nominal",
           "sort": ["Total", "AGE", "MM", "Private"]
         },
-        "xOffset": {
-          "value": 11
-        },
+        "xOffset": { "value": 10 },
         "y": {
           "field": "AprPct",
           "type": "quantitative",
           "axis": null,
-          "scale": {
-            "zero": true,
-            "nice": false,
-            "padding": 26
-          }
-        },
-        "tooltip": [
-          {
-            "field": "Entidade",
-            "type": "nominal",
-            "title": "Entidade"
-          },
-          {
-            "field": "AprPct",
-            "type": "quantitative",
-            "title": "APR (%)",
-            "format": ".1f"
-          }
-        ]
+          "scale": { "zero": true }
+        }
       }
     },
     {
       "mark": {
         "type": "text",
-        "dy": -4,
-        "fontSize": 8,
-        "fontWeight": "normal",
-        "color": "#2E2E2E",
-        "align": "center",
-        "baseline": "bottom"
+        "dy": -6,
+        "fontSize": 9,
+        "color": "#333"
       },
       "encoding": {
         "x": {
@@ -153,9 +109,7 @@
           "type": "nominal",
           "sort": ["Total", "AGE", "MM", "Private"]
         },
-        "xOffset": {
-          "value": -11
-        },
+        "xOffset": { "value": -10 },
         "y": {
           "field": "RollOutPct",
           "type": "quantitative"
@@ -168,12 +122,9 @@
     {
       "mark": {
         "type": "text",
-        "dy": -4,
-        "fontSize": 8,
-        "fontWeight": "normal",
-        "color": "#2E2E2E",
-        "align": "center",
-        "baseline": "bottom"
+        "dy": -6,
+        "fontSize": 9,
+        "color": "#333"
       },
       "encoding": {
         "x": {
@@ -181,9 +132,7 @@
           "type": "nominal",
           "sort": ["Total", "AGE", "MM", "Private"]
         },
-        "xOffset": {
-          "value": 11
-        },
+        "xOffset": { "value": 10 },
         "y": {
           "field": "AprPct",
           "type": "quantitative"
@@ -196,18 +145,14 @@
     {
       "mark": {
         "type": "circle",
-        "size": 560,
-        "opacity": 0.95
+        "size": 900,
+        "opacity": 0.9
       },
       "encoding": {
         "x": {
           "field": "Entidade",
           "type": "nominal",
-          "sort": ["Total", "AGE", "MM", "Private"],
-          "bandPosition": 0.5
-        },
-        "xOffset": {
-          "value": -10
+          "sort": ["Total", "AGE", "MM", "Private"]
         },
         "y": {
           "field": "BulletY",
@@ -218,40 +163,22 @@
           "type": "nominal",
           "scale": null,
           "legend": null
-        },
-        "tooltip": [
-          {
-            "field": "Entidade",
-            "type": "nominal",
-            "title": "Entidade"
-          },
-          {
-            "field": "DeltaPP",
-            "type": "quantitative",
-            "title": "Diferença (pp)",
-            "format": "+.1f"
-          }
-        ]
+        }
       }
     },
     {
       "mark": {
         "type": "text",
-        "fontSize": 7,
+        "fontSize": 9,
         "fontWeight": "bold",
         "color": "white",
-        "align": "center",
         "baseline": "middle"
       },
       "encoding": {
         "x": {
           "field": "Entidade",
           "type": "nominal",
-          "sort": ["Total", "AGE", "MM", "Private"],
-          "bandPosition": 0.5
-        },
-        "xOffset": {
-          "value": -10
+          "sort": ["Total", "AGE", "MM", "Private"]
         },
         "y": {
           "field": "BulletY",
