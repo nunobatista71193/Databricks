@@ -1,5 +1,6 @@
 {
   "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+
   "data": {
     "name": "dataset"
   },
@@ -21,16 +22,8 @@
       "as": "DeltaPP"
     },
     {
-      "calculate": "max(datum.RollOutPct, datum.AprPct) + 3",
+      "calculate": "40",
       "as": "BulletY"
-    },
-    {
-      "calculate": "format(datum.RollOutPct, '.0f')",
-      "as": "RollOutLabel"
-    },
-    {
-      "calculate": "format(datum.AprPct, '.0f')",
-      "as": "AprLabel"
     },
     {
       "calculate": "(datum.DeltaPP > 0 ? '+' : '') + format(datum.DeltaPP, '.0f') + ' pp'",
@@ -56,7 +49,7 @@
       ],
       "mark": {
         "type": "bar",
-        "size": 29,
+        "size": 30,
         "cornerRadiusTopLeft": 2,
         "cornerRadiusTopRight": 2
       },
@@ -85,7 +78,7 @@
           "type": "nominal",
           "sort": ["Roll Out", "APR"],
           "scale": {
-            "paddingInner": 0.08,
+            "paddingInner": 0.04,
             "paddingOuter": 0.02
           }
         },
@@ -94,9 +87,9 @@
           "type": "quantitative",
           "axis": null,
           "scale": {
+            "domain": [0, 45],
             "zero": true,
-            "nice": false,
-            "padding": 28
+            "nice": false
           }
         },
         "color": {
@@ -129,15 +122,6 @@
       }
     },
     {
-      "mark": {
-        "type": "text",
-        "fontSize": 8,
-        "fontWeight": "normal",
-        "color": "#2E2E2E",
-        "align": "center",
-        "baseline": "bottom",
-        "dy": -4
-      },
       "transform": [
         {
           "fold": ["RollOutPct", "AprPct"],
@@ -152,6 +136,15 @@
           "as": "ValueLabel"
         }
       ],
+      "mark": {
+        "type": "text",
+        "fontSize": 8,
+        "fontWeight": "normal",
+        "color": "#2E2E2E",
+        "align": "center",
+        "baseline": "bottom",
+        "dy": -4
+      },
       "encoding": {
         "x": {
           "field": "Entidade",
@@ -163,13 +156,18 @@
           "type": "nominal",
           "sort": ["Roll Out", "APR"],
           "scale": {
-            "paddingInner": 0.08,
+            "paddingInner": 0.04,
             "paddingOuter": 0.02
           }
         },
         "y": {
           "field": "Valor",
-          "type": "quantitative"
+          "type": "quantitative",
+          "scale": {
+            "domain": [0, 45],
+            "zero": true,
+            "nice": false
+          }
         },
         "text": {
           "field": "ValueLabel"
@@ -179,7 +177,7 @@
     {
       "mark": {
         "type": "circle",
-        "size": 650,
+        "size": 630,
         "opacity": 0.96
       },
       "encoding": {
@@ -191,7 +189,12 @@
         },
         "y": {
           "field": "BulletY",
-          "type": "quantitative"
+          "type": "quantitative",
+          "scale": {
+            "domain": [0, 45],
+            "zero": true,
+            "nice": false
+          }
         },
         "color": {
           "field": "DeltaColor",
@@ -219,7 +222,12 @@
         },
         "y": {
           "field": "BulletY",
-          "type": "quantitative"
+          "type": "quantitative",
+          "scale": {
+            "domain": [0, 45],
+            "zero": true,
+            "nice": false
+          }
         },
         "text": {
           "field": "DeltaLabel"
