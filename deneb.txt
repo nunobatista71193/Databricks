@@ -1,72 +1,113 @@
 {
   "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
   "data": { "name": "dataset" },
-  "width": 450,
-  "height": 280,
-
-  "transform": [
-    {
-      "fold": ["Rollout", "Blade Y"],
-      "as": ["Serie", "Valor"]
-    }
-  ],
-
-  "encoding": {
-    "x": {
-      "field": "Marca",
-      "type": "nominal",
-      "sort": ["Total", "AGE", "MM", "Private"],
-      "axis": {
-        "title": null,
-        "labelFontSize": 9,
-        "labelAngle": 0,
-        "labelLimit": 90,
-        "labelPadding": 8
-      }
-    },
-    "xOffset": {
-      "field": "Serie"
-    },
-    "y": {
-      "field": "Valor",
-      "type": "quantitative",
-      "axis": null
-    },
-    "color": {
-      "field": "Serie",
-      "type": "nominal",
-      "scale": {
-        "domain": ["Rollout", "Blade Y"],
-        "range": ["#9AD9DB", "#C21878"]
-      },
-      "legend": {
-        "title": null,
-        "orient": "top",
-        "direction": "horizontal",
-        "labelFontSize": 10
-      }
-    }
-  },
+  "width": 420,
+  "height": 260,
 
   "layer": [
     {
       "mark": {
         "type": "bar",
-        "width": 28,
-        "cornerRadiusTopLeft": 6,
-        "cornerRadiusTopRight": 6
+        "color": "#9AD9DB",
+        "width": 24,
+        "cornerRadiusTopLeft": 4,
+        "cornerRadiusTopRight": 4
+      },
+      "encoding": {
+        "x": {
+          "field": "Entidade",
+          "type": "nominal",
+          "sort": ["Total", "AGE", "MM", "Private"],
+          "axis": {
+            "title": null,
+            "labelFontSize": 9,
+            "labelAngle": 0,
+            "labelLimit": 80
+          }
+        },
+        "xOffset": {
+          "value": -14
+        },
+        "y": {
+          "field": "Conversion Rate (%) | Roll Out",
+          "type": "quantitative",
+          "axis": null
+        }
+      }
+    },
+    {
+      "mark": {
+        "type": "bar",
+        "color": "#C21878",
+        "width": 24,
+        "cornerRadiusTopLeft": 4,
+        "cornerRadiusTopRight": 4
+      },
+      "encoding": {
+        "x": {
+          "field": "Entidade",
+          "type": "nominal",
+          "sort": ["Total", "AGE", "MM", "Private"]
+        },
+        "xOffset": {
+          "value": 14
+        },
+        "y": {
+          "field": "Conversion Rate (%) | APR",
+          "type": "quantitative",
+          "axis": null
+        }
       }
     },
     {
       "mark": {
         "type": "text",
-        "dy": -10,
-        "fontSize": 12,
+        "dy": -8,
+        "fontSize": 11,
         "color": "#222"
       },
       "encoding": {
+        "x": {
+          "field": "Entidade",
+          "type": "nominal",
+          "sort": ["Total", "AGE", "MM", "Private"]
+        },
+        "xOffset": {
+          "value": -14
+        },
+        "y": {
+          "field": "Conversion Rate (%) | Roll Out",
+          "type": "quantitative"
+        },
         "text": {
-          "field": "Valor",
+          "field": "Conversion Rate (%) | Roll Out",
+          "type": "quantitative",
+          "format": ".0f"
+        }
+      }
+    },
+    {
+      "mark": {
+        "type": "text",
+        "dy": -8,
+        "fontSize": 11,
+        "color": "#222"
+      },
+      "encoding": {
+        "x": {
+          "field": "Entidade",
+          "type": "nominal",
+          "sort": ["Total", "AGE", "MM", "Private"]
+        },
+        "xOffset": {
+          "value": 14
+        },
+        "y": {
+          "field": "Conversion Rate (%) | APR",
+          "type": "quantitative"
+        },
+        "text": {
+          "field": "Conversion Rate (%) | APR",
           "type": "quantitative",
           "format": ".0f"
         }
