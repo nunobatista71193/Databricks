@@ -19,7 +19,11 @@
       "as": "DeltaPP"
     },
     {
-      "calculate": "max(datum.RollOutPct, datum.AprPct) + 3.5",
+      "calculate": "max(datum.RollOutPct, datum.AprPct)",
+      "as": "MaxBarValue"
+    },
+    {
+      "calculate": "datum.MaxBarValue + 5",
       "as": "BulletY"
     },
     {
@@ -35,7 +39,7 @@
       "as": "DeltaLabel"
     },
     {
-      "calculate": "datum.DeltaPP >= 0 ? '#7AA35A' : '#C75B5B'",
+      "calculate": "datum.DeltaPP >= 0 ? '#6F9A50' : '#C75B5B'",
       "as": "DeltaColor"
     }
   ],
@@ -45,7 +49,7 @@
       "mark": {
         "type": "bar",
         "color": "#A9DAD8",
-        "width": 22,
+        "width": 24,
         "cornerRadiusTopLeft": 3,
         "cornerRadiusTopRight": 3
       },
@@ -64,14 +68,17 @@
             "ticks": false
           }
         },
-        "xOffset": { "value": -12 },
+        "xOffset": {
+          "value": -13
+        },
         "y": {
           "field": "RollOutPct",
           "type": "quantitative",
           "axis": null,
           "scale": {
             "zero": true,
-            "nice": true
+            "nice": false,
+            "padding": 36
           }
         }
       }
@@ -80,7 +87,7 @@
       "mark": {
         "type": "bar",
         "color": "#9C1F5D",
-        "width": 22,
+        "width": 24,
         "cornerRadiusTopLeft": 3,
         "cornerRadiusTopRight": 3
       },
@@ -90,14 +97,17 @@
           "type": "nominal",
           "sort": ["Total", "AGE", "MM", "Private"]
         },
-        "xOffset": { "value": 12 },
+        "xOffset": {
+          "value": 13
+        },
         "y": {
           "field": "AprPct",
           "type": "quantitative",
           "axis": null,
           "scale": {
             "zero": true,
-            "nice": true
+            "nice": false,
+            "padding": 36
           }
         }
       }
@@ -105,10 +115,11 @@
     {
       "mark": {
         "type": "text",
-        "dy": -6,
-        "fontSize": 9,
+        "dy": -5,
+        "fontSize": 8,
         "fontWeight": "normal",
         "color": "#333333",
+        "align": "center",
         "baseline": "bottom"
       },
       "encoding": {
@@ -117,7 +128,9 @@
           "type": "nominal",
           "sort": ["Total", "AGE", "MM", "Private"]
         },
-        "xOffset": { "value": -12 },
+        "xOffset": {
+          "value": -13
+        },
         "y": {
           "field": "RollOutPct",
           "type": "quantitative"
@@ -130,10 +143,11 @@
     {
       "mark": {
         "type": "text",
-        "dy": -6,
-        "fontSize": 9,
+        "dy": -5,
+        "fontSize": 8,
         "fontWeight": "normal",
         "color": "#333333",
+        "align": "center",
         "baseline": "bottom"
       },
       "encoding": {
@@ -142,7 +156,9 @@
           "type": "nominal",
           "sort": ["Total", "AGE", "MM", "Private"]
         },
-        "xOffset": { "value": 12 },
+        "xOffset": {
+          "value": 13
+        },
         "y": {
           "field": "AprPct",
           "type": "quantitative"
@@ -155,8 +171,8 @@
     {
       "mark": {
         "type": "circle",
-        "size": 850,
-        "opacity": 0.9
+        "size": 700,
+        "opacity": 0.94
       },
       "encoding": {
         "x": {
@@ -179,7 +195,7 @@
     {
       "mark": {
         "type": "text",
-        "fontSize": 9,
+        "fontSize": 8,
         "fontWeight": "bold",
         "color": "white",
         "align": "center",
