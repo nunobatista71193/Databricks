@@ -5,6 +5,255 @@
     "name": "dataset"
   },
 
+  "width": 340,
+  "height": 200,
+
+  "transform": [
+    {
+      "calculate": "datum['Conversion Rate (%) | APR'] * 100",
+      "as": "AprPct"
+    },
+    {
+      "calculate": "datum['Conversion Rate (%) | Roll Out'] * 100",
+      "as": "RollOutPct"
+    },
+    {
+      "calculate": "datum.RollOutPct - datum.AprPct",
+      "as": "DeltaPP"
+    },
+    {
+      "calculate": "40",
+      "as": "BulletY"
+    },
+    {
+      "calculate": "(datum.DeltaPP > 0 ? '+' : '') + format(datum.DeltaPP, '.0f') + ' pp'",
+      "as": "DeltaLabel"
+    },
+    {
+      "calculate": "datum.DeltaPP > 0 ? '#6E974B' : datum.DeltaPP < 0 ? '#BE5A5A' : '#8D5B5B'",
+      "as": "DeltaColor"
+    }
+  ],
+
+  "layer": [
+    {
+      "transform": [
+        {
+          "fold": ["AprPct", "RollOutPct"],
+          "as": ["Serie", "Valor"]
+        },
+        {
+          "calculate": "datum.Serie === 'AprPct' ? 'Roll Out' : 'APR'",
+          "as": "SerieLabel"
+        }
+      ],
+      "mark": {
+        "type": "bar",
+        "size": 30,
+        "cornerRadiusTopLeft": 7,
+        "cornerRadiusTopRight": 7
+      },
+      "encoding": {
+        "x": {
+          "field": "Entidade",
+          "type": "nominal",
+          "sort": ["Total", "AGE", "MM", "Private"],
+          "scale": {
+            "paddingInner": 0.28,
+            "paddingOuter": 0.08
+          },
+          "axis": {
+            "title": null,
+            "labelFontSize": 8,
+            "labelFontWeight": "normal",
+            "labelAngle": 0,
+            "labelLimit": 70,
+            "labelPadding": 1,
+            "domain": false,
+            "ticks": false
+          }
+        },
+        "xOffset": {
+          "field": "SerieLabel",
+          "type": "nominal",
+          "sort": ["Roll Out", "APR"],
+          "scale": {
+            "paddingInner": 0.04,
+            "paddingOuter": 0.02
+          }
+        },
+        "y": {
+          "field": "Valor",
+          "type": "quantitative",
+          "axis": null,
+          "scale": {
+            "domain": [0, 45],
+            "zero": true,
+            "nice": false
+          }
+        },
+        "color": {
+          "field": "SerieLabel",
+          "type": "nominal",
+          "scale": {
+            "domain": ["Roll Out", "APR"],
+            "range": ["#A9DAD8", "#9C1F5D"]
+          },
+          "legend": null
+        },
+        "tooltip": [
+          {
+            "field": "Entidade",
+            "type": "nominal",
+            "title": "Entidade"
+          },
+          {
+            "field": "SerieLabel",
+            "type": "nominal",
+            "title": "Métrica"
+          },
+          {
+            "field": "Valor",
+            "type": "quantitative",
+            "title": "Conversion rate (%)",
+            "format": ".1f"
+          }
+        ]
+      }
+    },
+    {
+      "transform": [
+        {
+          "fold": ["AprPct", "RollOutPct"],
+          "as": ["Serie", "Valor"]
+        },
+        {
+          "calculate": "datum.Serie === 'AprPct' ? 'Roll Out' : 'APR'",
+          "as": "SerieLabel"
+        },
+        {
+          "calculate": "format(datum.Valor, '.0f')",
+          "as": "ValueLabel"
+        }
+      ],
+      "mark": {
+        "type": "text",
+        "fontSize": 8,
+        "fontWeight": "normal",
+        "color": "#2E2E2E",
+        "align": "center",
+        "baseline": "bottom",
+        "dy": -4
+      },
+      "encoding": {
+        "x": {
+          "field": "Entidade",
+          "type": "nominal",
+          "sort": ["Total", "AGE", "MM", "Private"]
+        },
+        "xOffset": {
+          "field": "SerieLabel",
+          "type": "nominal",
+          "sort": ["Roll Out", "APR"],
+          "scale": {
+            "paddingInner": 0.04,
+            "paddingOuter": 0.02
+          }
+        },
+        "y": {
+          "field": "Valor",
+          "type": "quantitative",
+          "scale": {
+            "domain": [0, 45],
+            "zero": true,
+            "nice": false
+          }
+        },
+        "text": {
+          "field": "ValueLabel"
+        }
+      }
+    },
+    {
+      "mark": {
+        "type": "circle",
+        "size": 630,
+        "opacity": 0.96
+      },
+      "encoding": {
+        "x": {
+          "field": "Entidade",
+          "type": "nominal",
+          "sort": ["Total", "AGE", "MM", "Private"],
+          "bandPosition": 0.5
+        },
+        "y": {
+          "field": "BulletY",
+          "type": "quantitative",
+          "scale": {
+            "domain": [0, 45],
+            "zero": true,
+            "nice": false
+          }
+        },
+        "color": {
+          "field": "DeltaColor",
+          "type": "nominal",
+          "scale": null,
+          "legend": null
+        }
+      }
+    },
+    {
+      "mark": {
+        "type": "text",
+        "fontSize": 7,
+        "fontWeight": "bold",
+        "color": "white",
+        "align": "center",
+        "baseline": "middle"
+      },
+      "encoding": {
+        "x": {
+          "field": "Entidade",
+          "type": "nominal",
+          "sort": ["Total", "AGE", "MM", "Private"],
+          "bandPosition": 0.5
+        },
+        "y": {
+          "field": "BulletY",
+          "type": "quantitative",
+          "scale": {
+            "domain": [0, 45],
+            "zero": true,
+            "nice": false
+          }
+        },
+        "text": {
+          "field": "DeltaLabel"
+        }
+      }
+    }
+  ],
+
+  "config": {
+    "view": {
+      "stroke": null
+    },
+    "axis": {
+      "grid": false,
+      "domain": false,
+      "ticks": false
+    },
+    "background": "white"
+  }
+}{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+
+  "data": {
+    "name": "dataset"
+  },
+
   "width": 350,
   "height": 160,
 
