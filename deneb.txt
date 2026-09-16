@@ -1,6 +1,8 @@
 {
   "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
-  "data": { "name": "dataset" },
+  "data": {
+    "name": "dataset"
+  },
 
   "width": 350,
   "height": 160,
@@ -19,7 +21,7 @@
       "as": "DeltaPP"
     },
     {
-      "calculate": "max(datum.RollOutPct, datum.AprPct) + 2.2",
+      "calculate": "max(datum.RollOutPct, datum.AprPct) + 2.5",
       "as": "BulletY"
     },
     {
@@ -45,7 +47,7 @@
       "mark": {
         "type": "bar",
         "color": "#A9DAD8",
-        "width": 25,
+        "width": 28,
         "cornerRadiusTopLeft": 2,
         "cornerRadiusTopRight": 2
       },
@@ -57,6 +59,7 @@
           "axis": {
             "title": null,
             "labelFontSize": 8,
+            "labelFontWeight": "normal",
             "labelAngle": 0,
             "labelLimit": 70,
             "labelPadding": 1,
@@ -65,7 +68,7 @@
           }
         },
         "xOffset": {
-          "value": -10
+          "value": -11
         },
         "y": {
           "field": "RollOutPct",
@@ -74,16 +77,29 @@
           "scale": {
             "zero": true,
             "nice": false,
-            "padding": 22
+            "padding": 26
           }
-        }
+        },
+        "tooltip": [
+          {
+            "field": "Entidade",
+            "type": "nominal",
+            "title": "Entidade"
+          },
+          {
+            "field": "RollOutPct",
+            "type": "quantitative",
+            "title": "Roll Out (%)",
+            "format": ".1f"
+          }
+        ]
       }
     },
     {
       "mark": {
         "type": "bar",
         "color": "#9C1F5D",
-        "width": 25,
+        "width": 28,
         "cornerRadiusTopLeft": 2,
         "cornerRadiusTopRight": 2
       },
@@ -94,7 +110,7 @@
           "sort": ["Total", "AGE", "MM", "Private"]
         },
         "xOffset": {
-          "value": 10
+          "value": 11
         },
         "y": {
           "field": "AprPct",
@@ -103,9 +119,22 @@
           "scale": {
             "zero": true,
             "nice": false,
-            "padding": 22
+            "padding": 26
           }
-        }
+        },
+        "tooltip": [
+          {
+            "field": "Entidade",
+            "type": "nominal",
+            "title": "Entidade"
+          },
+          {
+            "field": "AprPct",
+            "type": "quantitative",
+            "title": "APR (%)",
+            "format": ".1f"
+          }
+        ]
       }
     },
     {
@@ -125,7 +154,7 @@
           "sort": ["Total", "AGE", "MM", "Private"]
         },
         "xOffset": {
-          "value": -10
+          "value": -11
         },
         "y": {
           "field": "RollOutPct",
@@ -153,7 +182,7 @@
           "sort": ["Total", "AGE", "MM", "Private"]
         },
         "xOffset": {
-          "value": 10
+          "value": 11
         },
         "y": {
           "field": "AprPct",
@@ -167,7 +196,7 @@
     {
       "mark": {
         "type": "circle",
-        "size": 520,
+        "size": 560,
         "opacity": 0.95
       },
       "encoding": {
@@ -176,6 +205,9 @@
           "type": "nominal",
           "sort": ["Total", "AGE", "MM", "Private"],
           "bandPosition": 0.5
+        },
+        "xOffset": {
+          "value": -10
         },
         "y": {
           "field": "BulletY",
@@ -186,7 +218,20 @@
           "type": "nominal",
           "scale": null,
           "legend": null
-        }
+        },
+        "tooltip": [
+          {
+            "field": "Entidade",
+            "type": "nominal",
+            "title": "Entidade"
+          },
+          {
+            "field": "DeltaPP",
+            "type": "quantitative",
+            "title": "Diferença (pp)",
+            "format": "+.1f"
+          }
+        ]
       }
     },
     {
@@ -204,6 +249,9 @@
           "type": "nominal",
           "sort": ["Total", "AGE", "MM", "Private"],
           "bandPosition": 0.5
+        },
+        "xOffset": {
+          "value": -10
         },
         "y": {
           "field": "BulletY",
