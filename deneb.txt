@@ -1,17 +1,53 @@
 {
   "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
   "data": { "name": "dataset" },
-  "width": 420,
-  "height": 260,
+
+  "width": 350,
+  "height": 160,
+
+  "transform": [
+    {
+      "calculate": "datum['Conversion Rate (%) | Roll Out'] * 100",
+      "as": "RollOutPct"
+    },
+    {
+      "calculate": "datum['Conversion Rate (%) | APR'] * 100",
+      "as": "AprPct"
+    },
+    {
+      "calculate": "datum.AprPct - datum.RollOutPct",
+      "as": "DeltaPP"
+    },
+    {
+      "calculate": "max(datum.RollOutPct, datum.AprPct) + 3",
+      "as": "BulletY"
+    },
+    {
+      "calculate": "format(datum.RollOutPct, '.0f')",
+      "as": "RollOutLabel"
+    },
+    {
+      "calculate": "format(datum.AprPct, '.0f')",
+      "as": "AprLabel"
+    },
+    {
+      "calculate": "(datum.DeltaPP > 0 ? '+' : '') + format(datum.DeltaPP, '.0f') + ' pp'",
+      "as": "DeltaLabel"
+    },
+    {
+      "calculate": "datum.DeltaPP >= 0 ? '#8BB174' : '#C85C5C'",
+      "as": "DeltaColor"
+    }
+  ],
 
   "layer": [
     {
       "mark": {
         "type": "bar",
-        "color": "#9AD9DB",
-        "width": 24,
-        "cornerRadiusTopLeft": 4,
-        "cornerRadiusTopRight": 4
+        "color": "#BFE3E0",
+        "width": 16,
+        "cornerRadiusTopLeft": 3,
+        "cornerRadiusTopRight": 3
       },
       "encoding": {
         "x": {
@@ -20,28 +56,30 @@
           "sort": ["Total", "AGE", "MM", "Private"],
           "axis": {
             "title": null,
-            "labelFontSize": 9,
+            "labelFontSize": 8,
             "labelAngle": 0,
-            "labelLimit": 80
+            "labelLimit": 70,
+            "labelPadding": 6,
+            "domain": false,
+            "ticks": false
           }
         },
-        "xOffset": {
-          "value": -14
-        },
+        "xOffset": { "value": -10 },
         "y": {
-          "field": "Conversion Rate (%) | Roll Out",
+          "field": "RollOutPct",
           "type": "quantitative",
-          "axis": null
+          "axis": null,
+          "scale": { "zero": true }
         }
       }
     },
     {
       "mark": {
         "type": "bar",
-        "color": "#C21878",
-        "width": 24,
-        "cornerRadiusTopLeft": 4,
-        "cornerRadiusTopRight": 4
+        "color": "#9C1F5D",
+        "width": 16,
+        "cornerRadiusTopLeft": 3,
+        "cornerRadiusTopRight": 3
       },
       "encoding": {
         "x": {
@@ -49,22 +87,21 @@
           "type": "nominal",
           "sort": ["Total", "AGE", "MM", "Private"]
         },
-        "xOffset": {
-          "value": 14
-        },
+        "xOffset": { "value": 10 },
         "y": {
-          "field": "Conversion Rate (%) | APR",
+          "field": "AprPct",
           "type": "quantitative",
-          "axis": null
+          "axis": null,
+          "scale": { "zero": true }
         }
       }
     },
     {
       "mark": {
         "type": "text",
-        "dy": -8,
-        "fontSize": 11,
-        "color": "#222"
+        "dy": -6,
+        "fontSize": 9,
+        "color": "#333"
       },
       "encoding": {
         "x": {
@@ -72,26 +109,22 @@
           "type": "nominal",
           "sort": ["Total", "AGE", "MM", "Private"]
         },
-        "xOffset": {
-          "value": -14
-        },
+        "xOffset": { "value": -10 },
         "y": {
-          "field": "Conversion Rate (%) | Roll Out",
+          "field": "RollOutPct",
           "type": "quantitative"
         },
         "text": {
-          "field": "Conversion Rate (%) | Roll Out",
-          "type": "quantitative",
-          "format": ".0f"
+          "field": "RollOutLabel"
         }
       }
     },
     {
       "mark": {
         "type": "text",
-        "dy": -8,
-        "fontSize": 11,
-        "color": "#222"
+        "dy": -6,
+        "fontSize": 9,
+        "color": "#333"
       },
       "encoding": {
         "x": {
@@ -99,17 +132,60 @@
           "type": "nominal",
           "sort": ["Total", "AGE", "MM", "Private"]
         },
-        "xOffset": {
-          "value": 14
-        },
+        "xOffset": { "value": 10 },
         "y": {
-          "field": "Conversion Rate (%) | APR",
+          "field": "AprPct",
           "type": "quantitative"
         },
         "text": {
-          "field": "Conversion Rate (%) | APR",
-          "type": "quantitative",
-          "format": ".0f"
+          "field": "AprLabel"
+        }
+      }
+    },
+    {
+      "mark": {
+        "type": "circle",
+        "size": 900,
+        "opacity": 0.9
+      },
+      "encoding": {
+        "x": {
+          "field": "Entidade",
+          "type": "nominal",
+          "sort": ["Total", "AGE", "MM", "Private"]
+        },
+        "y": {
+          "field": "BulletY",
+          "type": "quantitative"
+        },
+        "color": {
+          "field": "DeltaColor",
+          "type": "nominal",
+          "scale": null,
+          "legend": null
+        }
+      }
+    },
+    {
+      "mark": {
+        "type": "text",
+        "fontSize": 9,
+        "fontWeight": "bold",
+        "color": "white",
+        "baseline": "middle"
+      },
+      "encoding": {
+        "x": {
+          "field": "Entidade",
+          "type": "nominal",
+          "sort": ["Total", "AGE", "MM", "Private"]
+        },
+        "y": {
+          "field": "BulletY",
+          "type": "quantitative"
+        },
+        "text": {
+          "field": "DeltaLabel"
         }
       }
     }
@@ -123,6 +199,7 @@
       "grid": false,
       "domain": false,
       "ticks": false
-    }
+    },
+    "background": "white"
   }
 }
