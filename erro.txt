@@ -5,15 +5,9 @@ Ficheiros no volume: 83
 ================================================================================
 APAGAR TABELAS DE DESTINO
 ================================================================================
-A limpar agpt_insurance_dv_catalog.wkb_bus_operations_price.ags_overview (linhas atuais=4,400,589)
-SQL: DROP TABLE IF EXISTS `agpt_insurance_dv_catalog`.`wkb_bus_operations_price`.`ags_overview`
-Tabela apagada: agpt_insurance_dv_catalog.wkb_bus_operations_price.ags_overview
-A limpar agpt_insurance_dv_catalog.wkb_bus_operations_price.ocs_overview (linhas atuais=467,517)
-SQL: DROP TABLE IF EXISTS `agpt_insurance_dv_catalog`.`wkb_bus_operations_price`.`ocs_overview`
-Tabela apagada: agpt_insurance_dv_catalog.wkb_bus_operations_price.ocs_overview
-A limpar agpt_insurance_dv_catalog.wkb_bus_operations_price.sd_overview (linhas atuais=1,975,180)
-SQL: DROP TABLE IF EXISTS `agpt_insurance_dv_catalog`.`wkb_bus_operations_price`.`sd_overview`
-Tabela apagada: agpt_insurance_dv_catalog.wkb_bus_operations_price.sd_overview
+Tabela nao existe (nada a limpar): agpt_insurance_dv_catalog.wkb_bus_operations_price.ags_overview
+Tabela nao existe (nada a limpar): agpt_insurance_dv_catalog.wkb_bus_operations_price.ocs_overview
+Tabela nao existe (nada a limpar): agpt_insurance_dv_catalog.wkb_bus_operations_price.sd_overview
 
 ================================================================================
 TABELA ags_overview
@@ -61,7 +55,7 @@ Tipos aplicados:
   int:           ['ano_sim', 'anomes_sim', 'semana_sim', 'confinamento', 'diff_dias_sim_risco', 'diff_dias_sim_conversao', 'vt_CC', 'vt_CV', 'CVE_CAIXA', 'CVE_PORTAS', 'CVE_ZONA_DP', 'CVE_ZONA_RC', 'vt_num_lugares', 'vt_anosviatura', 'num_sin_ult_5anos', 'num_anos_sem_sinistros', 'num_sin_ult_ano', 'NUM_SINISTROS_ULT_5_ANOS', 'num_anos_com_seguro', 'idade_condutor', 'anos_carta', 'CVE_BM_INICIAL', 'NUM_ISP_DESC', 'header_row']
   flag->int:     ['flag_simulacao', 'flag_conversao', 'flag_promocode_SD', 'ALARME_DE_SEGURANCA', 'APOIO_ESTACIONAMENTO', 'MELHORIA_VISIBILIDADE', 'CONTROLE_CONDUCAO', 'CONTROLE_TRAVAGEM', 'flag_premio', 'target_ageas', 'Parc_PO_Motor20']
   string:        28 colunas
-  [tempo] spark.read.parquet + tipos + replace table ags_overview: 0.7s
+  [tempo] spark.read.parquet + tipos + replace table ags_overview: 0.9s
 
 
 
