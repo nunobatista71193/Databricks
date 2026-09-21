@@ -10,11 +10,11 @@
 
   "transform": [
     {
-      "calculate": "datum['Conversion Rate (%) | APR'] * 100",
+      "calculate": "datum['Sales | APR'] ",
       "as": "AprPct"
     },
     {
-      "calculate": "datum['Conversion Rate (%) | Roll Out'] * 100",
+      "calculate": "datum['Sales | Roll Out'] ",
       "as": "RollOutPct"
     },
     {
@@ -22,11 +22,11 @@
       "as": "DeltaPP"
     },
     {
-      "calculate": "40",
+      "calculate": "900",
       "as": "BulletY"
     },
     {
-      "calculate": "(datum.DeltaPP > 0 ? '+' : '') + format(datum.DeltaPP, '.0f') + ' pp'",
+      "calculate": "(datum.DeltaPP > 0 ? '+' : '') + format(datum.DeltaPP, '.0f') + ' %'",
       "as": "DeltaLabel"
     },
     {
@@ -47,7 +47,7 @@
       "as": "DeltaSimulations"
     },
     {
-      "calculate": "44",
+      "calculate": "750",
       "as": "BulletSimY"
     },
     {
@@ -112,7 +112,7 @@
           "type": "quantitative",
           "axis": null,
           "scale": {
-            "domain": [0, 50],
+            "domain": [0, 1000],
             "zero": true,
             "nice": false
           }
@@ -122,7 +122,7 @@
           "type": "nominal",
           "scale": {
             "domain": ["Roll Out", "APR"],
-            "range": ["#A9DAD8", "#9C1F5D"]
+            "range": ["#E6E6E6", "#9C1F5D"]
           },
           "legend": null
         },
@@ -189,7 +189,7 @@
           "field": "Valor",
           "type": "quantitative",
           "scale": {
-            "domain": [0, 50],
+            "domain": [0, 1000],
             "zero": true,
             "nice": false
           }
@@ -263,7 +263,7 @@
           "field": "BulletY",
           "type": "quantitative",
           "scale": {
-            "domain": [0, 50],
+            "domain": [0, 1000],
             "zero": true,
             "nice": false
           }
@@ -277,7 +277,7 @@
     {
       "mark": {
         "type": "circle",
-        "size": 740,
+        "size": 840,
         "opacity": 0.96,
         "stroke": "#FFFFFF",
         "strokeWidth": 1
@@ -293,7 +293,7 @@
           "field": "BulletSimY",
           "type": "quantitative",
           "scale": {
-            "domain": [0, 50],
+            "domain": [0, 700],
             "zero": true,
             "nice": false
           }
@@ -334,7 +334,7 @@
     {
       "mark": {
         "type": "text",
-        "fontSize": 7,
+        "fontSize": 10,
         "fontWeight": "bold",
         "color": "white",
         "align": "center",
