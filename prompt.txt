@@ -1,0 +1,474 @@
+Create a corporate document titled:
+
+"Databricks Data Model Standards & Naming Conventions"
+
+The document should serve as the official standard for Data Engineering, Data Analytics and Business Intelligence teams responsible for creating and maintaining tables in Databricks using Unity Catalog.
+
+CONTEXT
+
+The Databricks environment already has the Catalog and Schema structure defined.
+
+Example:
+
+agpt_insurance_dv_catalog.wkb_bus_operations_claimsmotor
+
+The purpose of this document is not to define Catalogs or Schemas, but instead establish standards and best practices for:
+
+- Table creation
+- Naming conventions
+- Data model design
+- Data governance
+- Metadata management
+- Performance optimization
+- Data quality
+- Consistency across systems
+
+Data sources may originate from:
+
+- SAS
+- ACAP
+- Autoinforma
+- GeoAPI
+- CRM
+- External APIs
+- Excel files
+- CSV files
+- Relational databases
+- Internal systems
+- Third-party providers
+
+The document should be written in professional English and be suitable for adoption as an enterprise-wide standard.
+
+======================================================================
+1. INTRODUCTION
+======================================================================
+
+Explain:
+
+- Purpose of the standard
+- Benefits of standardization
+- Maintainability
+- Scalability
+- Data Governance
+- Data Quality
+- Data Lineage
+- Reusability
+- Consistency across teams and domains
+
+======================================================================
+2. GUIDING PRINCIPLES
+======================================================================
+
+Define the following principles:
+
+- Simplicity
+- Readability
+- Consistency
+- Scalability
+- Reusability
+- Auditability
+- Governance
+- Traceability
+- Performance
+- Security
+
+======================================================================
+3. GENERAL NAMING CONVENTIONS
+======================================================================
+
+Establish the following standards:
+
+- Mandatory use of snake_case
+- Lowercase only
+- No spaces
+- No special characters
+- No dots (.) in table names
+- No hyphens (-)
+- No prefixes such as tbl_, tb_, tmp_, new_
+
+Provide examples of correct and incorrect naming conventions.
+
+======================================================================
+4. RAW TABLES
+======================================================================
+
+Raw tables represent data received directly from source systems.
+
+Naming standard:
+
+raw_<entity>_<source>_<brand>
+
+Examples:
+
+raw_claims_sas_ageas
+raw_policies_sas_ageas
+raw_vehicle_sales_acap_ageas
+raw_vehicle_stock_autoinforma_ageas
+raw_postcodes_geoapi_all
+
+Explain the rationale behind the naming standard.
+
+Describe what should and should not be performed at Raw layer level.
+
+======================================================================
+5. CORE TABLES
+======================================================================
+
+Core tables represent harmonized and standardized business entities.
+
+Naming standard:
+
+core_<entity>_<brand>
+
+Examples:
+
+core_claims_ageas
+core_policies_ageas
+core_customers_ageas
+core_vehicles_ageas
+
+Explain:
+
+- Harmonization
+- Standardized business definitions
+- Common data model
+- Data integration across systems
+
+======================================================================
+6. DIMENSION TABLES
+======================================================================
+
+Naming standard:
+
+dim_<entity>_<brand>
+
+Examples:
+
+dim_customer_ageas
+dim_vehicle_ageas
+dim_policy_ageas
+
+For shared enterprise dimensions:
+
+dim_date
+dim_postcode
+dim_municipality
+dim_district
+
+Explain:
+
+- Dimension concepts
+- Surrogate keys
+- Slowly Changing Dimensions
+- Shared dimensions
+
+======================================================================
+7. FACT TABLES
+======================================================================
+
+Naming standard:
+
+fact_<entity>_<brand>
+
+Examples:
+
+fact_claims_ageas
+fact_policies_ageas
+fact_premiums_ageas
+fact_payments_ageas
+
+Explain:
+
+- Fact table concepts
+- Grain definition
+- Measures
+- Additive and non-additive metrics
+
+Provide detailed examples.
+
+======================================================================
+8. AGGREGATED TABLES
+======================================================================
+
+Naming standard:
+
+agg_<entity>_<granularity>_<brand>
+
+Examples:
+
+agg_claims_month_ageas
+agg_claims_year_ageas
+agg_portfolio_month_ageas
+agg_vehicle_sales_month_ageas
+
+Explain:
+
+- Physical aggregations
+- Performance use cases
+- Reporting scenarios
+- Usage recommendations
+
+======================================================================
+9. SNAPSHOT TABLES
+======================================================================
+
+Naming standard:
+
+snap_<entity>_<brand>
+
+Examples:
+
+snap_portfolio_ageas
+snap_claim_reserves_ageas
+
+Explain:
+
+- Point-in-time snapshots
+- Historical tracking
+- Monthly portfolio snapshots
+- Regulatory reporting scenarios
+
+======================================================================
+10. REFERENCE TABLES
+======================================================================
+
+Naming standard:
+
+ref_<entity>
+
+Examples:
+
+ref_fuel_type
+ref_claim_status
+ref_region
+ref_vehicle_segment
+
+Explain:
+
+- Shared reference data
+- Master data
+- Lookup tables
+
+======================================================================
+11. WORK TABLES
+======================================================================
+
+Naming standard:
+
+wrk_<entity>_<process>
+
+Examples:
+
+wrk_claim_matching
+wrk_vehicle_deduplication
+wrk_customer_enrichment
+
+Explain:
+
+- Temporary processing tables
+- Intermediate calculations
+- ETL support structures
+
+======================================================================
+12. DATA TYPE STANDARDS
+======================================================================
+
+Provide detailed standards for the following:
+
+Identifiers
+
+Always STRING:
+
+- Policy Number
+- Claim Number
+- Customer Number
+- Vehicle Number
+- External IDs
+
+Explain preservation of leading zeros and cross-system compatibility.
+
+Postal Codes
+
+Always STRING
+
+Registration Plates
+
+Always STRING
+
+Tax Numbers
+
+Always STRING
+
+Dates
+
+Always DATE
+
+Date Time
+
+Always TIMESTAMP
+
+Monetary Amounts
+
+Always DECIMAL(18,2)
+
+Percentages
+
+Always DECIMAL(10,4)
+
+Provide examples and rationale.
+
+======================================================================
+13. MANDATORY TECHNICAL COLUMNS
+======================================================================
+
+Every analytical table should include:
+
+source_system
+source_file
+ingestion_date
+ingestion_timestamp
+record_hash
+
+For each attribute explain:
+
+- Definition
+- Purpose
+- Governance benefit
+- Audit capability
+
+======================================================================
+14. DATA QUALITY STANDARDS
+======================================================================
+
+Define minimum quality controls:
+
+- Null checks
+- Uniqueness checks
+- Duplicate detection
+- Referential integrity
+- Domain validations
+- Date validations
+- Numeric validations
+- Completeness checks
+
+Provide implementation examples and best practices.
+
+======================================================================
+15. DELTA LAKE STANDARDS
+======================================================================
+
+Define mandatory usage of Delta tables.
+
+Explain:
+
+- ACID transactions
+- Time travel
+- Schema evolution
+- Version control
+- Reliability benefits
+
+Include recommendations for:
+
+delta.autoOptimize.optimizeWrite
+
+delta.autoOptimize.autoCompact
+
+Provide technical examples.
+
+======================================================================
+16. DOCUMENTATION STANDARDS
+======================================================================
+
+Define mandatory documentation requirements:
+
+- Table descriptions
+- Column descriptions
+- Business definitions
+- Data owner
+- Technical owner
+- Source system documentation
+- Refresh frequency
+
+Provide examples.
+
+======================================================================
+17. GOVERNANCE STANDARDS
+======================================================================
+
+Explain:
+
+- Data ownership
+- Data stewardship
+- Data lineage
+- Access control
+- Unity Catalog integration
+- Audit requirements
+- Regulatory compliance
+
+======================================================================
+18. BUSINESS EXAMPLES
+======================================================================
+
+Create complete examples for:
+
+ACAP
+
+raw_vehicle_sales_acap_ageas
+core_vehicle_sales_ageas
+fact_vehicle_sales_ageas
+agg_vehicle_sales_month_ageas
+
+Explain the transformation journey from source to analytical model.
+
+SAS Claims
+
+raw_claims_sas_ageas
+core_claims_ageas
+fact_claims_ageas
+agg_claims_month_ageas
+
+Explain the transformation journey from source to analytical model.
+
+======================================================================
+19. RECOMMENDED ADDITIONAL STANDARDS
+======================================================================
+
+Include recommendations for:
+
+- Primary Keys
+- Surrogate Keys
+- Business Keys
+- Naming standards for columns
+- Partitioning strategies
+- Cluster keys
+- Retention policies
+- Archiving policies
+- Table ownership
+- Performance optimization
+- Data lifecycle management
+
+======================================================================
+20. NAMING CONVENTION CHEAT SHEET
+======================================================================
+
+Produce a final summary section containing:
+
+raw_<entity>_<source>_<brand>
+
+core_<entity>_<brand>
+
+dim_<entity>_<brand>
+
+fact_<entity>_<brand>
+
+agg_<entity>_<granularity>_<brand>
+
+snap_<entity>_<brand>
+
+ref_<entity>
+
+wrk_<entity>_<process>
+
+Include practical business examples for every pattern.
+
+The document should be highly detailed, enterprise-grade, governance-oriented, and suitable for adoption as the official Databricks Data Platform standard for a large insurance organization operating multiple brands and multiple data sources.
