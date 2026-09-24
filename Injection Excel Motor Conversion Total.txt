@@ -271,12 +271,21 @@ pdf_stage = pdf_stage.where(pdf_stage.notna(), None)
 pdf_stage["source_file"] = source_file_name
 pdf_stage["source_sheet"] = sheet_name
 
-stage_path = os.path.join(LOCAL_TMP, "BDA_AGENTES_stage.parquet")
-if os.path.exists(stage_path):
-    os.remove(stage_path)
-pdf_stage.to_parquet(stage_path, engine="pyarrow", index=False, compression="snappy")
+# ------------------------------------------------------------
+# CORRECAO 42501 (INSUFFICIENT_PERMISSIONS ... SELECT ON ANY FILE)
+# Antes: spark.read.parquet("/local_disk0/tmp/...") -> em Unity Catalog um caminho
+# sem esquema e resolvido como dbfs:/ e exige SELECT ON ANY FILE (privilegio legado,
+# que nao e dado a utilizadores normais, mesmo com todos os grants no catalogo/schema).
+# Agora: o DataFrame e criado diretamente em memoria a partir do pandas.
+# ------------------------------------------------------------
+from pyspark.sql.types import StructType, StructField, StringType
 
-df = spark.read.parquet(stage_path)
+stage_schema = StructType([StructField(c, StringType(), True) for c in pdf_stage.columns])
+rows = [
+    tuple(None if (v is None or v is pd.NA) else str(v) for v in rec)
+    for rec in pdf_stage.itertuples(index=False, name=None)
+]
+df = spark.createDataFrame(rows, schema=stage_schema)
 df = aplicar_tipos_spark(df, kinds)
 df = df.withColumn("load_timestamp", F.current_timestamp())
 
@@ -284,75 +293,32 @@ log("Schema Spark a gravar:")
 df.printSchema()
 
 
-def table_exists():
-    rows = spark.sql("SHOW TABLES IN " + catalog_name + "." + schema_name).collect()
-    for r in rows:
-        d = r.asDict()
-        nome = d.get("tableName") or d.get("table") or d.get("name")
-        if nome == table_name:
-            return True
-    return False
-
-
-volume_delta = (
-    "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/"
-    "pba&uw/99_delta/raw_bda_agentes_sas"
-)
-log("1) A gravar Delta no Volume (nao precisa de CREATE TABLE):")
-log(volume_delta)
-(
-    df.write.format("delta")
-    .mode("overwrite")
-    .option("overwriteSchema", "true")
-    .save(volume_delta)
-)
-log("Delta gravado no Volume.")
-
-df.createOrReplaceTempView("_tmp_bda_agentes")
-existe = table_exists()
-log("Tabela gerida ja existe: " + str(existe))
-gravou = False
-destino_final = volume_delta
+# ------------------------------------------------------------
+# Gravar como tabela gerida Unity Catalog
+# (removido o CREATE TABLE ... LOCATION '/Volumes/...': o UC nao permite
+#  tabelas cujo LOCATION esteja dentro de um Volume)
+# ------------------------------------------------------------
+existe = spark.catalog.tableExists(fqn)
+log("Tabela ja existe: " + str(existe))
 
 if existe:
+    log("Overwrite da tabela existente")
+    df.createOrReplaceTempView("_tmp_bda_agentes")
     try:
-        log("Overwrite da tabela existente (sem DROP / sem CREATE OR REPLACE)")
         (
             df.write.format("delta")
             .mode("overwrite")
             .option("overwriteSchema", "true")
             .saveAsTable(fqn)
         )
-        gravou = True
     except Exception as exc:
-        log("saveAsTable overwrite falhou: " + str(exc).split("\n")[0][:260])
-        try:
-            spark.sql("INSERT OVERWRITE TABLE " + qn + " SELECT * FROM _tmp_bda_agentes")
-            gravou = True
-            log("INSERT OVERWRITE concluido")
-        except Exception as exc2:
-            log("INSERT OVERWRITE falhou: " + str(exc2).split("\n")[0][:260])
+        log("saveAsTable falhou, a tentar INSERT OVERWRITE: " + str(exc).split("\n")[0][:260])
+        spark.sql("INSERT OVERWRITE TABLE " + qn + " SELECT * FROM _tmp_bda_agentes")
 else:
-    try:
-        stmt = "CREATE TABLE " + qn + " USING DELTA LOCATION '" + volume_delta + "'"
-        log("SQL: " + stmt)
-        spark.sql(stmt)
-        gravou = True
-        destino_final = fqn
-        log("Tabela externa criada a apontar para o Volume.")
-    except Exception as exc:
-        log("CREATE TABLE no schema falhou (42501 = falta CREATE no schema, nao e o DROP):")
-        log(str(exc).split("\n")[0][:300])
-        log("Os dados JA estao no Volume. Um admin pode correr:")
-        log("  GRANT CREATE TABLE ON SCHEMA " + catalog_name + "." + schema_name + " TO `seu_user`;")
-        log("  CREATE TABLE " + qn + " USING DELTA LOCATION '" + volume_delta + "';")
+    log("A criar tabela gerida " + fqn)
+    df.write.format("delta").mode("overwrite").saveAsTable(fqn)
 
-if gravou:
-    df_final = spark.table(fqn)
-    log("Leitura: tabela " + fqn)
-else:
-    df_final = spark.read.format("delta").load(volume_delta)
-    log("Leitura: Volume " + volume_delta)
+df_final = spark.table(fqn)
 log("Registos carregados: " + "{:,}".format(df_final.count()))
 log("Schema final:")
 for field in df_final.schema.fields:
