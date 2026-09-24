@@ -294,11 +294,25 @@ def table_exists():
     return False
 
 
+volume_delta = (
+    "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/"
+    "pba&uw/99_delta/raw_bda_agentes_sas"
+)
+log("1) A gravar Delta no Volume (nao precisa de CREATE TABLE):")
+log(volume_delta)
+(
+    df.write.format("delta")
+    .mode("overwrite")
+    .option("overwriteSchema", "true")
+    .save(volume_delta)
+)
+log("Delta gravado no Volume.")
+
 df.createOrReplaceTempView("_tmp_bda_agentes")
 existe = table_exists()
-log("Tabela ja existe: " + str(existe))
+log("Tabela gerida ja existe: " + str(existe))
 gravou = False
-destino_final = fqn
+destino_final = volume_delta
 
 if existe:
     try:
@@ -320,41 +334,25 @@ if existe:
             log("INSERT OVERWRITE falhou: " + str(exc2).split("\n")[0][:260])
 else:
     try:
-        stmt = "CREATE TABLE " + qn + " USING DELTA AS SELECT * FROM _tmp_bda_agentes"
+        stmt = "CREATE TABLE " + qn + " USING DELTA LOCATION '" + volume_delta + "'"
         log("SQL: " + stmt)
         spark.sql(stmt)
         gravou = True
+        destino_final = fqn
+        log("Tabela externa criada a apontar para o Volume.")
     except Exception as exc:
-        log("CREATE TABLE falhou: " + str(exc).split("\n")[0][:260])
-        try:
-            (
-                df.write.format("delta")
-                .mode("overwrite")
-                .option("overwriteSchema", "true")
-                .saveAsTable(fqn)
-            )
-            gravou = True
-        except Exception as exc2:
-            log("saveAsTable create falhou: " + str(exc2).split("\n")[0][:260])
+        log("CREATE TABLE no schema falhou (42501 = falta CREATE no schema, nao e o DROP):")
+        log(str(exc).split("\n")[0][:300])
+        log("Os dados JA estao no Volume. Um admin pode correr:")
+        log("  GRANT CREATE TABLE ON SCHEMA " + catalog_name + "." + schema_name + " TO `seu_user`;")
+        log("  CREATE TABLE " + qn + " USING DELTA LOCATION '" + volume_delta + "';")
 
-if not gravou:
-    volume_delta = (
-        "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/"
-        "pba&uw/99_delta/raw_bda_agentes_sas"
-    )
-    log("Sem privilegio na tabela gerida. A gravar Delta no Volume:")
-    log(volume_delta)
-    (
-        df.write.format("delta")
-        .mode("overwrite")
-        .option("overwriteSchema", "true")
-        .save(volume_delta)
-    )
-    destino_final = volume_delta
-    gravou = True
-    log("Pede a um admin: CREATE TABLE " + qn + " USING DELTA LOCATION '" + volume_delta + "'")
-
-df_final = spark.read.format("delta").load(destino_final) if destino_final != fqn else spark.table(fqn)
+if gravou:
+    df_final = spark.table(fqn)
+    log("Leitura: tabela " + fqn)
+else:
+    df_final = spark.read.format("delta").load(volume_delta)
+    log("Leitura: Volume " + volume_delta)
 log("Registos carregados: " + "{:,}".format(df_final.count()))
 log("Schema final:")
 for field in df_final.schema.fields:
