@@ -1,12 +1,23 @@
-Tabela destino: agpt_insurance_dv_catalog.wkb_bus_operations_claimsmotor.raw_bda_agentes_sas
-Ficheiro origem: /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/BDA_AGENTES.xlsx
-OK - Catálogo encontrado: agpt_insurance_dv_catalog
-OK - Schema encontrado: wkb_bus_operations_claimsmotor
-A ler Excel...
-/local_disk0/.ephemeral_nfs/envs/pythonEnv-41255c1a-9b59-4dcf-aa45-06c280695593/lib/python3.12/site-packages/openpyxl/styles/stylesheet.py:237: UserWarning: Workbook contains no default style, apply openpyxl's default
-  warn("Workbook contains no default style, apply openpyxl's default")
-Registos encontrados: 5,095
-
-
-PySparkTypeError: Exception thrown when converting pandas.Series (object) with name 'FNACIM' to Arrow Array (None).
-[Trace ID: 00-1edbd59af932898178232729ea9c7b63-1cc4be0a6fb1cd0a-00]
+[CANNOT_PARSE_TIMESTAMP] Text '01/01/1899 00:00' could not be parsed at index 0. Use `try_to_date` to tolerate invalid input string and return NULL instead. SQLSTATE: 22007
+File <command-5261709213057421>, line 319
+    317 else:
+    318     log("A criar tabela gerida " + fqn)
+--> 319     df.write.format("delta").mode("overwrite").saveAsTable(fqn)
+    321 df_final = spark.table(fqn)
+    322 log("Registos carregados: " + "{:,}".format(df_final.count()))
+File /databricks/python/lib/python3.12/site-packages/pyspark/sql/connect/client/core.py:2537, in SparkConnectClient._handle_rpc_error(self, rpc_error)
+   2533             logger.debug(f"Received ErrorInfo: {info}")
+   2535             self._handle_rpc_error_with_error_info(info, status.message, status_code)  # EDGE
+-> 2537             raise convert_exception(
+   2538                 info,
+   2539                 status.message,
+   2540                 self._fetch_enriched_error(info),
+   2541                 self._display_server_stack_trace(),
+   2542                 status_code,
+   2543             ) from None
+   2545     raise SparkConnectGrpcException(
+   2546         message=status.message,
+   2547         sql_state=ErrorCode.CLIENT_UNEXPECTED_MISSING_SQL_STATE,  # EDGE
+   2548         grpc_status_code=status_code,
+   2549     ) from None
+   2550 else:
