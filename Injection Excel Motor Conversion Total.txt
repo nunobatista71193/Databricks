@@ -294,70 +294,67 @@ def table_exists():
     return False
 
 
-def wipe_table():
-    if not table_exists():
-        log("Tabela nao existe (nada a limpar): " + fqn)
-        return
-    try:
-        n = spark.table(fqn).count()
-        log("A limpar " + fqn + " (linhas atuais=" + "{:,}".format(n) + ")")
-    except Exception:
-        log("A limpar " + fqn)
-    for stmt in (
-        "DROP TABLE IF EXISTS " + qn,
-        "DROP TABLE IF EXISTS " + fqn,
-    ):
-        try:
-            log("SQL: " + stmt)
-            spark.sql(stmt)
-            if not table_exists():
-                log("Tabela apagada.")
-                return
-        except Exception as exc:
-            log("DROP falhou: " + str(exc).split("\n")[0][:240])
-    for stmt in ("DELETE FROM " + qn, "TRUNCATE TABLE " + qn):
-        try:
-            log("SQL: " + stmt)
-            spark.sql(stmt)
-            log("Dados apagados; a tabela mantem-se para overwrite.")
-            return
-        except Exception as exc:
-            log("Limpeza alternativa falhou: " + str(exc).split("\n")[0][:240])
-    log("Nao foi possivel DROP. Vou tentar overwrite na tabela existente.")
-
-
-wipe_table()
 df.createOrReplaceTempView("_tmp_bda_agentes")
-
+existe = table_exists()
+log("Tabela ja existe: " + str(existe))
 gravou = False
-if not table_exists():
+destino_final = fqn
+
+if existe:
+    try:
+        log("Overwrite da tabela existente (sem DROP / sem CREATE OR REPLACE)")
+        (
+            df.write.format("delta")
+            .mode("overwrite")
+            .option("overwriteSchema", "true")
+            .saveAsTable(fqn)
+        )
+        gravou = True
+    except Exception as exc:
+        log("saveAsTable overwrite falhou: " + str(exc).split("\n")[0][:260])
+        try:
+            spark.sql("INSERT OVERWRITE TABLE " + qn + " SELECT * FROM _tmp_bda_agentes")
+            gravou = True
+            log("INSERT OVERWRITE concluido")
+        except Exception as exc2:
+            log("INSERT OVERWRITE falhou: " + str(exc2).split("\n")[0][:260])
+else:
     try:
         stmt = "CREATE TABLE " + qn + " USING DELTA AS SELECT * FROM _tmp_bda_agentes"
         log("SQL: " + stmt)
         spark.sql(stmt)
         gravou = True
     except Exception as exc:
-        log("CREATE TABLE falhou: " + str(exc).split("\n")[0][:240])
+        log("CREATE TABLE falhou: " + str(exc).split("\n")[0][:260])
+        try:
+            (
+                df.write.format("delta")
+                .mode("overwrite")
+                .option("overwriteSchema", "true")
+                .saveAsTable(fqn)
+            )
+            gravou = True
+        except Exception as exc2:
+            log("saveAsTable create falhou: " + str(exc2).split("\n")[0][:260])
 
 if not gravou:
-    try:
-        stmt = "CREATE OR REPLACE TABLE " + qn + " USING DELTA AS SELECT * FROM _tmp_bda_agentes"
-        log("SQL: " + stmt)
-        spark.sql(stmt)
-        gravou = True
-    except Exception as exc:
-        log("CREATE OR REPLACE falhou: " + str(exc).split("\n")[0][:240])
-
-if not gravou:
-    log("Fallback saveAsTable overwrite")
+    volume_delta = (
+        "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/"
+        "pba&uw/99_delta/raw_bda_agentes_sas"
+    )
+    log("Sem privilegio na tabela gerida. A gravar Delta no Volume:")
+    log(volume_delta)
     (
         df.write.format("delta")
         .mode("overwrite")
         .option("overwriteSchema", "true")
-        .saveAsTable(fqn)
+        .save(volume_delta)
     )
+    destino_final = volume_delta
+    gravou = True
+    log("Pede a um admin: CREATE TABLE " + qn + " USING DELTA LOCATION '" + volume_delta + "'")
 
-df_final = spark.table(fqn)
+df_final = spark.read.format("delta").load(destino_final) if destino_final != fqn else spark.table(fqn)
 log("Registos carregados: " + "{:,}".format(df_final.count()))
 log("Schema final:")
 for field in df_final.schema.fields:
