@@ -283,15 +283,79 @@ df = df.withColumn("load_timestamp", F.current_timestamp())
 log("Schema Spark a gravar:")
 df.printSchema()
 
-spark.sql("DROP TABLE IF EXISTS " + qn)
-log("Tabela anterior removida.")
 
+def table_exists():
+    rows = spark.sql("SHOW TABLES IN " + catalog_name + "." + schema_name).collect()
+    for r in rows:
+        d = r.asDict()
+        nome = d.get("tableName") or d.get("table") or d.get("name")
+        if nome == table_name:
+            return True
+    return False
+
+
+def wipe_table():
+    if not table_exists():
+        log("Tabela nao existe (nada a limpar): " + fqn)
+        return
+    try:
+        n = spark.table(fqn).count()
+        log("A limpar " + fqn + " (linhas atuais=" + "{:,}".format(n) + ")")
+    except Exception:
+        log("A limpar " + fqn)
+    for stmt in (
+        "DROP TABLE IF EXISTS " + qn,
+        "DROP TABLE IF EXISTS " + fqn,
+    ):
+        try:
+            log("SQL: " + stmt)
+            spark.sql(stmt)
+            if not table_exists():
+                log("Tabela apagada.")
+                return
+        except Exception as exc:
+            log("DROP falhou: " + str(exc).split("\n")[0][:240])
+    for stmt in ("DELETE FROM " + qn, "TRUNCATE TABLE " + qn):
+        try:
+            log("SQL: " + stmt)
+            spark.sql(stmt)
+            log("Dados apagados; a tabela mantem-se para overwrite.")
+            return
+        except Exception as exc:
+            log("Limpeza alternativa falhou: " + str(exc).split("\n")[0][:240])
+    log("Nao foi possivel DROP. Vou tentar overwrite na tabela existente.")
+
+
+wipe_table()
 df.createOrReplaceTempView("_tmp_bda_agentes")
-try:
-    spark.sql("CREATE OR REPLACE TABLE " + qn + " USING DELTA AS SELECT * FROM _tmp_bda_agentes")
-except Exception as exc:
-    log("CREATE OR REPLACE falhou, fallback saveAsTable: " + str(exc).split("\n")[0][:220])
-    df.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(fqn)
+
+gravou = False
+if not table_exists():
+    try:
+        stmt = "CREATE TABLE " + qn + " USING DELTA AS SELECT * FROM _tmp_bda_agentes"
+        log("SQL: " + stmt)
+        spark.sql(stmt)
+        gravou = True
+    except Exception as exc:
+        log("CREATE TABLE falhou: " + str(exc).split("\n")[0][:240])
+
+if not gravou:
+    try:
+        stmt = "CREATE OR REPLACE TABLE " + qn + " USING DELTA AS SELECT * FROM _tmp_bda_agentes"
+        log("SQL: " + stmt)
+        spark.sql(stmt)
+        gravou = True
+    except Exception as exc:
+        log("CREATE OR REPLACE falhou: " + str(exc).split("\n")[0][:240])
+
+if not gravou:
+    log("Fallback saveAsTable overwrite")
+    (
+        df.write.format("delta")
+        .mode("overwrite")
+        .option("overwriteSchema", "true")
+        .saveAsTable(fqn)
+    )
 
 df_final = spark.table(fqn)
 log("Registos carregados: " + "{:,}".format(df_final.count()))
