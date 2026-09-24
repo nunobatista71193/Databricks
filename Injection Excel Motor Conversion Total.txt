@@ -179,6 +179,11 @@ def _sql_num(ident):
     return "case when " + raw + " in ('', '.', '-', '-.') then null else " + raw + " end"
 
 
+# 01/01/1899 e o "zero" de datas do Excel/SAS -> normalmente significa data vazia.
+# Pôr False se quiseres manter essas datas.
+ANULAR_DATAS_ANTES_1900 = True
+
+
 def aplicar_tipos_spark(df, kinds):
     selects = []
     for c in df.columns:
@@ -188,17 +193,22 @@ def aplicar_tipos_spark(df, kinds):
             selects.append(ident)
             continue
         if kind == "date":
+            # Corta a parte da hora ("01/01/1899 00:00" -> "01/01/1899", "2020-01-01T00:00" -> "2020-01-01")
+            # e usa try_to_date (devolve NULL em vez de rebentar com CANNOT_PARSE_TIMESTAMP).
             txt = "trim(cast(" + ident + " as string))"
-            selects.append(
+            d = "substring_index(substring_index(" + txt + ", ' ', 1), 'T', 1)"
+            parsed = (
                 "coalesce("
-                "try_cast(" + ident + " as date),"
-                "to_date(" + txt + ", 'yyyy-MM-dd'),"
-                "to_date(" + txt + ", 'dd/MM/yyyy'),"
-                "to_date(" + txt + ", 'dd-MM-yyyy'),"
-                "to_date(" + txt + ", 'yyyy/MM/dd'),"
-                "to_date(" + txt + ", 'dd.MM.yyyy')"
-                ") as " + ident
+                "try_to_date(" + d + ", 'yyyy-MM-dd'),"
+                "try_to_date(" + d + ", 'd/M/yyyy'),"
+                "try_to_date(" + d + ", 'd-M-yyyy'),"
+                "try_to_date(" + d + ", 'yyyy/M/d'),"
+                "try_to_date(" + d + ", 'd.M.yyyy')"
+                ")"
             )
+            if ANULAR_DATAS_ANTES_1900:
+                parsed = "case when " + parsed + " < date'1900-01-01' then null else " + parsed + " end"
+            selects.append(parsed + " as " + ident)
         elif kind == "int":
             selects.append("try_cast(" + _sql_num(ident) + " as int) as " + ident)
         else:
