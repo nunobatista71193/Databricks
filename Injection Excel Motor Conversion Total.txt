@@ -1,907 +1,217 @@
 # ============================================================
-# INGESTAO RESUMO AGS / OCS / SD OVERVIEW
-# OVERWRITE COMPLETO — versao otimizada + tipos
+# CONFIGURAÇÃO
 # ============================================================
 
-import gc
-import importlib
-import os
 import re
-import shutil
-import subprocess
-import sys
-import time
-import unicodedata
-from collections import defaultdict
-
 import pandas as pd
-from pyspark.sql import functions as F
 
-
-def log(msg=""):
-    print(msg, flush=True)
-
-
-def ensure_pkg(module_name, pip_name):
-    try:
-        importlib.import_module(module_name)
-        return True
-    except Exception:
-        log("A instalar " + pip_name + " ...")
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", pip_name])
-            importlib.invalidate_caches()
-            importlib.import_module(module_name)
-            log("Instalado: " + pip_name)
-            return True
-        except Exception as exc:
-            log("Falha a instalar " + pip_name + ": " + str(exc).split("\n")[0][:220])
-            return False
-
-
-ensure_pkg("pyarrow", "pyarrow")
-ensure_pkg("python_calamine", "python-calamine")
-
+from pyspark.sql.functions import (
+    current_timestamp,
+    lit
+)
 
 catalog_name = "agpt_insurance_dv_catalog"
-schema_name = "wkb_bus_operations_price"
-source_folder = "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/01_raw/"
-staging_folder = "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/"
+schema_name = "wkb_bus_operations_claimsmotor"
+table_name = "raw_bda_agentes_sas"
 
-FILE_MAPPINGS = [
-    {"file": "WORK_sim_ags_final.xlsx", "table": "ags_overview", "preferred_sheet": None},
-    {"file": "WORK_sim_ags_final_2025.xlsx", "table": "ags_overview", "preferred_sheet": None},
-    {"file": "WORK_sim_ags_final_2024.xlsx", "table": "ags_overview", "preferred_sheet": None},
-    {"file": "WORK_sim_ags_final_2023.xlsx", "table": "ags_overview", "preferred_sheet": None},
-    {"file": "WORK_sim_ags_final_2022.xlsx", "table": "ags_overview", "preferred_sheet": None},
-    {"file": "WORK_sim_ags_final_2021.xlsx", "table": "ags_overview", "preferred_sheet": None},
-    {"file": "WORK_SIM_OCS_FINAL.xlsx", "table": "ocs_overview", "preferred_sheet": None},
-    {"file": "WORK_SIMULACOES_SD_2025.xlsx", "table": "sd_overview", "preferred_sheet": None},
-    {"file": "WORK_SIMULACOES_SD_2024.xlsx", "table": "sd_overview", "preferred_sheet": None},
-    {"file": "WORK_SIMULACOES_SD_2023.xlsx", "table": "sd_overview", "preferred_sheet": None},
-    {"file": "WORK_SIMULACOES_SD_2022.xlsx", "table": "sd_overview", "preferred_sheet": None},
-    {"file": "WORK_SIMULACOES_SD_2021.xlsx", "table": "sd_overview", "preferred_sheet": None},
-    {"file": "WORK_SIMULACOES_SD.xlsx", "table": "sd_overview", "preferred_sheet": None},
-]
+full_table_name = f"{catalog_name}.{schema_name}.{table_name}"
 
-HEADER_SCAN_ROWS = 15
-CAST_ALL_TO_STRING = True
-VERBOSE_HEADERS = False
-RESET_STAGING_ALWAYS = False
-SKIP_EXISTING_PARQUET = True
-FORCE_REPROCESS_FILES = {"WORK_SIMULACOES_SD.xlsx"}
-# Se a flag_conversao vier a 0/null mas data_conversao estiver preenchida, assume 1.
-DERIVE_FLAG_CONVERSAO_FROM_DATA = True
-FORCE_DECIMAL_COLS = set()
-FORCE_INT_COLS = set()
-FORCE_STRING_COLS = set()
+source_file = "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/BDA_AGENTES.xlsx"
 
-if os.path.isdir("/local_disk0/tmp"):
-    LOCAL_TMP = "/local_disk0/tmp/excel_ingest"
-else:
-    LOCAL_TMP = "/tmp/excel_ingest"
-os.makedirs(LOCAL_TMP, exist_ok=True)
+print(f"Tabela destino: {full_table_name}")
+print(f"Ficheiro origem: {source_file}")
 
+# ============================================================
+# FUNÇÕES AUXILIARES
+# ============================================================
 
-def timed(label):
-    class _T:
-        def __enter__(self):
-            self.t0 = time.time()
-            return self
+def decode_excel_column_name(name):
 
-        def __exit__(self, *args):
-            log("  [tempo] " + label + ": " + "{:.1f}s".format(time.time() - self.t0))
+    if name is None:
+        return ""
 
-    return _T()
-
-
-def try_spark_conf(key, value):
-    try:
-        spark.conf.set(key, value)
-        return True
-    except Exception as exc:
-        log("Conf ignorada (" + key + "): " + str(exc).split("\n")[0][:180])
-        return False
-
-
-try_spark_conf("spark.sql.shuffle.partitions", "16")
-
-
-_XML_ESCAPE_RE = re.compile(r"_x([0-9A-Fa-f]{4,8})_")
-_XML_ESCAPE_LOOSE_RE = re.compile(r"(?<![A-Za-z0-9])x([0-9A-Fa-f]{4})(?![A-Za-z0-9])")
-
-
-def decode_excel_xml_escapes(value):
-    if value is None or not isinstance(value, str):
-        return value
-    text = value
-
-    def _to_char(match):
-        try:
-            return chr(int(match.group(1), 16))
-        except (ValueError, OverflowError):
-            return match.group(0)
-
-    text = _XML_ESCAPE_RE.sub(_to_char, text)
-    if "x00" in text:
-        text = _XML_ESCAPE_LOOSE_RE.sub(_to_char, text)
-    return text.replace("\xa0", " ").replace("\u200b", "")
-
-
-def decode_cell(value):
-    if isinstance(value, str):
-        text = decode_excel_xml_escapes(value).strip()
-        return text if text else None
-    return value
-
-
-def _needs_xml_decode(text):
-    return ("_x" in text) or ("x00" in text) or ("\xa0" in text) or ("\u200b" in text)
-
-
-def decode_object_column(series):
-    if series.dtype != object:
-        return series
-    sample = series.dropna().head(50).tolist()
-    has_str = False
-    has_escape = False
-    for v in sample:
-        if isinstance(v, str):
-            has_str = True
-            if _needs_xml_decode(v):
-                has_escape = True
-                break
-    if not has_str:
-        return series
-    if has_escape:
-        return series.map(decode_cell)
-    return series
+    return re.sub(
+        r"_x([0-9A-Fa-f]{4})_",
+        lambda m: chr(int(m.group(1), 16)),
+        str(name)
+    )
 
 
 def sanitize_column_name(name):
-    nome = decode_excel_xml_escapes(str(name) if name is not None else "")
-    nome = nome.strip()
-    if nome.lower().startswith("unnamed") or nome.lower() in ("", "nan", "none", "nat"):
-        return "coluna_sem_nome"
-    nome = re.sub(r"[ ,;{}()\n\t\r=]", "_", nome)
+
+    novo_nome = decode_excel_column_name(name)
+
     substituicoes = {
-        "º": "o", "ª": "a", "%": "pct", "/": "_", "\\": "_", "#": "num",
-        "€": "eur", "$": "usd", "-": "_", ".": "_", "?": "", "!": "",
-        "*": "", "+": "mais", "&": "e", "'": "", '"': "",
+        "º": "o",
+        "ª": "a",
+        "%": "pct",
+        "/": "_",
+        "\\": "_",
+        "#": "num",
+        "€": "eur",
+        "$": "usd",
+        "&": "and",
+        "-": "_",
+        ".": "_",
+        ":": "_"
     }
-    for old, new in substituicoes.items():
-        nome = nome.replace(old, new)
-    nome = re.sub("_+", "_", nome).strip("_")
-    if nome == "":
-        nome = "coluna_sem_nome"
-    if nome[0].isdigit():
-        nome = "c_" + nome
-    return nome
+
+    for original, substituto in substituicoes.items():
+        novo_nome = novo_nome.replace(original, substituto)
+
+    novo_nome = re.sub(r"[ ,;{}()\n\t=]", "_", novo_nome)
+    novo_nome = re.sub(r"_+", "_", novo_nome)
+
+    novo_nome = novo_nome.strip("_").lower()
+
+    if not novo_nome:
+        novo_nome = "coluna_sem_nome"
+
+    return novo_nome
 
 
-def uniquify_names(names):
-    usados = {}
-    resultado = []
-    for nome in names:
-        if nome not in usados:
-            usados[nome] = 0
-            resultado.append(nome)
+def sanitize_dataframe_columns(df):
+
+    nomes_originais = df.columns
+    nomes_novos = []
+    contador = {}
+
+    for nome in nomes_originais:
+
+        nome_limpo = sanitize_column_name(nome)
+
+        if nome_limpo in contador:
+            contador[nome_limpo] += 1
+            nome_limpo = f"{nome_limpo}_{contador[nome_limpo]}"
         else:
-            usados[nome] += 1
-            resultado.append(nome + "_" + str(usados[nome]))
-    return resultado
+            contador[nome_limpo] = 0
+
+        nomes_novos.append(nome_limpo)
+
+    for original, novo in zip(nomes_originais, nomes_novos):
+
+        if original != novo:
+            df = df.withColumnRenamed(original, novo)
+
+    return df
 
 
-def is_ags_file(source_file):
-    return "ags" in source_file.lower()
+# ============================================================
+# VALIDAR CATÁLOGO
+# ============================================================
 
-
-def is_ocs_file(source_file):
-    return "ocs" in source_file.lower()
-
-
-def rename_ags_cdpostal(columns):
-    novas = []
-    ja_usou_codigo = False
-    for nome in columns:
-        if nome.upper() == "CDPOSTAL" and not ja_usou_codigo:
-            novas.append("CODIGO_POSTAL")
-            ja_usou_codigo = True
-        else:
-            novas.append(nome)
-    return uniquify_names(novas)
-
-
-def normalizar_codigo_postal_series(series):
-    text = series.map(
-        lambda v: None
-        if v is None or (isinstance(v, float) and pd.isna(v))
-        else str(int(v))
-        if isinstance(v, int)
-        else str(v)
-    )
-    text = text.astype("string").str.strip()
-    text = text.str.replace("\xa0", "", regex=False).str.replace(" ", "", regex=False)
-    text = text.str.replace(r"\.0+$", "", regex=True)
-    invalid = text.isna() | text.isin(["", "nan", "none", "nat", "NaN", "None", "NaT"])
-    text = text.mask(invalid, pd.NA)
-    out = pd.Series(pd.NA, index=series.index, dtype="string")
-    m_fmt = text.str.match(r"^\d{4}-\d{3}$", na=False)
-    m_7 = text.str.match(r"^\d{7}$", na=False)
-    out = out.mask(m_fmt, text)
-    out = out.mask(m_7, text.str.slice(0, 4) + "-" + text.str.slice(4, 7))
-    return out.astype(object).where(out.notna(), None)
-
-
-def aplicar_regras_negocio(pdf, source_file):
-    if is_ags_file(source_file):
-        pdf.columns = rename_ags_cdpostal(list(pdf.columns))
-        log("Regra AGS aplicada: CDPOSTAL -> CODIGO_POSTAL")
-
-    if is_ocs_file(source_file):
-        alvo = None
-        for c in pdf.columns:
-            if c.upper() == "CODIGO_POSTAL":
-                alvo = c
-                break
-        if alvo is None:
-            log("AVISO OCS: coluna CODIGO_POSTAL nao encontrada.")
-        else:
-            if alvo != "CODIGO_POSTAL":
-                pdf = pdf.rename(columns={alvo: "CODIGO_POSTAL"})
-                alvo = "CODIGO_POSTAL"
-            pdf[alvo] = normalizar_codigo_postal_series(pdf[alvo])
-            validos = pdf[alvo].notna().sum()
-            log(
-                "Regra OCS aplicada em CODIGO_POSTAL: "
-                + "{:,}".format(int(validos))
-                + " validos / "
-                + "{:,}".format(len(pdf))
-                + " linhas"
-            )
-    return pdf
-
-
-META_COLS = {"source_file", "source_sheet", "header_row", "load_timestamp"}
-
-
-def _fold(name):
-    n = unicodedata.normalize("NFD", str(name or ""))
-    n = "".join(ch for ch in n if unicodedata.category(ch) != "Mn")
-    return n.lower()
-
-
-EXACT_TYPES = {
-    "marca": "string",
-    "lob": "string",
-    "tarifa": "string",
-    "num_simulacao": "string",
-    "data_simulacao": "string",
-    "data_inicio_risco": "string",
-    "apolice": "string",
-    "nif": "string",
-    "cve_pack": "string",
-    "pack": "string",
-    "data_conversao": "string",
-    "canal": "string",
-    "campanhas_ocs_ags": "string",
-    "promocode_sd": "string",
-    "tipo_promocode_sd": "string",
-    "vt_categoria": "string",
-    "vt_marca": "string",
-    "vt_combustivel": "string",
-    "tipo_cliente": "string",
-    "distrito_designacao": "string",
-    "concelho_designacao": "string",
-    "segmento_target1": "string",
-    "zona_ocs": "string",
-    "dir_comercial_ocs": "string",
-    "consultor_ocs": "string",
-    "segmento_target": "string",
-    "codigo_postal": "string",
-    "cdpostal": "string",
-    "codpostal_4": "string",
-    "ano_sim": "int",
-    "anomes_sim": "int",
-    "semana_sim": "int",
-    "confinamento": "int",
-    "diff_dias_sim_risco": "int",
-    "diff_dias_sim_conversao": "int",
-    "flag_simulacao": "flag",
-    "flag_conversao": "flag",
-    "flag_promocode_sd": "flag",
-    "flag_premio": "flag",
-    "alarme_de_seguranca": "flag",
-    "apoio_estacionamento": "flag",
-    "melhoria_visibilidade": "flag",
-    "controle_conducao": "flag",
-    "controle_travagem": "flag",
-    "target_ageas": "flag",
-    "parc_po_motor20": "flag",
-    "vt_cc": "int",
-    "vt_cv": "int",
-    "cve_caixa": "int",
-    "cve_portas": "int",
-    "cve_zona_dp": "int",
-    "cve_zona_rc": "int",
-    "vt_num_lugares": "int",
-    "vt_anosviatura": "int",
-    "num_sin_ult_5anos": "int",
-    "num_sin_ult_ano": "int",
-    "num_sinistros_ult_5_anos": "int",
-    "num_anos_sem_sinistros": "int",
-    "num_anos_com_seguro": "int",
-    "idade_condutor": "int",
-    "anos_carta": "int",
-    "cve_bm_inicial": "int",
-    "num_isp_desc": "int",
-    "header_row": "int",
-    "vt_valor_seguro": "decimal",
-    "vt_pesobruto": "decimal",
-    "vt_tara": "decimal",
-    "vt_racio_peso_potencia": "decimal",
-    "premio_total": "decimal",
-    "qua_premio_2": "decimal",
-    "premio_frac": "decimal",
-}
-
-STRING_EXACT = {
-    "codigo_postal", "cdpostal", "nif", "nipc", "niss", "nic",
-    "matricula", "email", "mail", "telefone", "telemovel",
-    "iban", "apolice", "source_file", "source_sheet",
-}
-STRING_TOKENS = (
-    "codigo_postal", "matricula", "email", "morada", "endereco",
-    "localidade", "concelho", "distrito", "freguesia", "marca",
-    "modelo", "descricao", "observ", "comentario", "notas",
-    "telefone", "telemovel", "consultor", "promocode", "segmento",
+catalog_exists = (
+    spark.sql("SHOW CATALOGS")
+         .filter(f"catalog = '{catalog_name}'")
+         .count()
 )
-DECIMAL_TOKENS = (
-    "premio", "valor_seguro", "franquia", "taxa", "comissao",
-    "desconto", "agravamento", "iuc", "isv", "pesobruto", "tara",
-    "racio", "preco", "capital",
+
+if catalog_exists == 0:
+    raise Exception(f"Catálogo não encontrado: {catalog_name}")
+
+print(f"OK - Catálogo encontrado: {catalog_name}")
+
+# ============================================================
+# VALIDAR SCHEMA
+# ============================================================
+
+schema_exists = (
+    spark.sql(f"SHOW SCHEMAS IN {catalog_name}")
+         .filter(f"databaseName = '{schema_name}'")
+         .count()
 )
-INT_TOKENS = (
-    "idade_condutor", "idade_tomador", "anos_sem_sinistro",
-    "anos_com_seguro", "anos_carta", "anos_habilit", "n_sinistro",
-    "num_sin", "num_anos", "cilindrada", "lugares", "ano_constru",
-    "ano_fabric", "ano_matric", "bonus_malus",
+
+if schema_exists == 0:
+    raise Exception(
+        f"Schema não encontrado: {catalog_name}.{schema_name}"
+    )
+
+print(f"OK - Schema encontrado: {schema_name}")
+
+# ============================================================
+# LEITURA EXCEL
+# ============================================================
+
+print("A ler Excel...")
+
+pdf = pd.read_excel(
+    source_file,
+    engine="openpyxl"
 )
-FLAG_PREFIXES = ("flag_", "flg_", "ind_")
 
+pdf = pdf.where(pd.notnull(pdf), None)
 
-def classificar_coluna(nome):
-    if nome in FORCE_STRING_COLS:
-        return "string"
-    if nome in FORCE_INT_COLS:
-        return "int"
-    if nome in FORCE_DECIMAL_COLS:
-        return "decimal"
-    if nome in META_COLS and nome != "header_row":
-        return "meta"
-    n = _fold(nome)
-    if n in EXACT_TYPES:
-        return EXACT_TYPES[n]
-    if n in STRING_EXACT:
-        return "string"
-    if n.startswith(FLAG_PREFIXES) or n.endswith("_flag") or n.endswith("_flg"):
-        return "flag"
-    if any(tok in n for tok in STRING_TOKENS):
-        return "string"
-    if any(tok in n for tok in DECIMAL_TOKENS):
-        return "decimal"
-    if n == "idade" or n.startswith("idade_") or any(tok in n for tok in INT_TOKENS):
-        return "int"
-    return "string"
+print(f"Registos encontrados: {len(pdf):,}")
 
+if len(pdf) == 0:
+    raise Exception("Ficheiro sem dados.")
 
-def _sql_ident(colname):
-    return "`" + str(colname).replace("`", "") + "`"
+# ============================================================
+# CRIAR DATAFRAME SPARK
+# ============================================================
 
+df = spark.createDataFrame(pdf)
 
-def _sql_num(ident):
-    raw = "regexp_replace(trim(cast(" + ident + " as string)), '[\\u00A0 €$]', '')"
-    raw = "nullif(" + raw + ", '')"
-    raw = (
-        "case"
-        " when " + raw + " is null then null"
-        " when lower(" + raw + ") in ('nan','none','nat','null','-') then null"
-        " when " + raw + " rlike '^[0-9]{1,3}(\\\\.[0-9]{3})+,[0-9]+$' "
-        "  then regexp_replace(regexp_replace(" + raw + ", '\\\\.', ''), ',', '.')"
-        " when " + raw + " like '%,%' then regexp_replace(" + raw + ", ',', '.')"
-        " else " + raw
-        + " end"
+# ============================================================
+# SANITIZAR COLUNAS
+# ============================================================
+
+df = sanitize_dataframe_columns(df)
+
+print("Schema inferido:")
+
+df.printSchema()
+
+# ============================================================
+# COLUNAS TÉCNICAS
+# ============================================================
+
+df = (
+    df
+    .withColumn(
+        "source_file",
+        lit("BDA_AGENTES.xlsx")
     )
-    raw = "regexp_replace(" + raw + ", '[^0-9.-]', '')"
-    raw = "regexp_replace(" + raw + ", '\\\\.0+$', '')"
-    raw = "regexp_replace(" + raw + ", '\\\\.$', '')"
-    raw = (
-        "case when " + raw + " is null or " + raw + " in ('', '.', '-', '-.') then null else " + raw + " end"
+    .withColumn(
+        "load_timestamp",
+        current_timestamp()
     )
-    return raw
+)
 
+# ============================================================
+# DROP TABELA EXISTENTE
+# ============================================================
 
-def aplicar_tipos_spark(df):
-    decimais, inteiros, flags, textos = [], [], [], []
-    selects = []
-    for c in df.columns:
-        ident = _sql_ident(c)
-        kind = classificar_coluna(c)
-        if c == "load_timestamp":
-            selects.append(ident)
-            continue
-        if kind == "meta":
-            selects.append("cast(" + ident + " as string) as " + ident)
-            continue
-        if kind == "decimal":
-            decimais.append(c)
-            selects.append("try_cast(" + _sql_num(ident) + " as decimal(18,2)) as " + ident)
-        elif kind == "flag":
-            flags.append(c)
-            raw = "upper(regexp_replace(trim(cast(" + ident + " as string)), '[\\u00A0 ]', ''))"
-            mapped = (
-                "case"
-                " when " + raw + " rlike '^(1|1\\.0+|S|SIM|Y|YES|TRUE|T|X|VERDADEIRO|CONVERTIDO|CONVERSAO)$' then 1"
-                " when " + raw + " rlike '(^|_)(SIM|CONVERT)' then 1"
-                " when " + raw + " rlike '^(0|0\\.0+|N|NAO|NÃO|NO|FALSE|F|FALSO|NAO_CONVERTIDO)$' then 0"
-                " when " + raw + " rlike '^[0-9]{4}-[0-9]{2}-[0-9]{2}' then 1"
-                " else try_cast(" + _sql_num(ident) + " as int) end"
-            )
-            selects.append("try_cast((" + mapped + ") as int) as " + ident)
-        elif kind == "int":
-            inteiros.append(c)
-            selects.append("try_cast(" + _sql_num(ident) + " as int) as " + ident)
-        else:
-            textos.append(c)
-            selects.append("cast(" + ident + " as string) as " + ident)
-    log("Tipos aplicados:")
-    log("  decimal(18,2): " + str(decimais))
-    log("  int:           " + str(inteiros))
-    log("  flag->int:     " + str(flags))
-    log("  string:        " + str(len(textos)) + " colunas")
-    out = df.selectExpr(*selects)
-    if DERIVE_FLAG_CONVERSAO_FROM_DATA:
-        flag_col = next((c for c in out.columns if _fold(c) == "flag_conversao"), None)
-        data_col = next((c for c in out.columns if _fold(c) == "data_conversao"), None)
-        if flag_col and data_col:
-            data_ok = (
-                F.trim(F.col(data_col).cast("string")).isNotNull()
-                & (~F.lower(F.trim(F.col(data_col).cast("string"))).isin("", "nan", "none", "nat", "null"))
-            )
-            out = out.withColumn(
-                flag_col,
-                F.when(F.col(flag_col) == 1, F.lit(1))
-                .when(data_ok, F.lit(1))
-                .otherwise(F.col(flag_col)),
-            )
-            log("Regra extra: " + flag_col + " = 1 quando " + data_col + " preenchida")
-    return out
+spark.sql(
+    f"DROP TABLE IF EXISTS {full_table_name}"
+)
 
+print("Tabela anterior removida.")
 
-def to_local_path(path):
-    if path.startswith("dbfs:"):
-        return path.replace("dbfs:", "", 1)
-    return path
+# ============================================================
+# ESCRITA DELTA
+# ============================================================
 
+(
+    df.write
+      .format("delta")
+      .mode("overwrite")
+      .option("overwriteSchema", "true")
+      .saveAsTable(full_table_name)
+)
 
-def copy_to_local_disk(volume_path, file_name):
-    local_src = to_local_path(volume_path)
-    local_copy = os.path.join(LOCAL_TMP, file_name)
-    if os.path.exists(local_copy):
-        os.remove(local_copy)
-    with open(local_src, "rb") as src, open(local_copy, "wb") as dst:
-        shutil.copyfileobj(src, dst, length=8 * 1024 * 1024)
-    return local_copy
+print("Tabela criada.")
 
+# ============================================================
+# VALIDAÇÃO
+# ============================================================
 
-def pick_excel_engine():
-    try:
-        import python_calamine  # noqa: F401
-        return "calamine"
-    except Exception:
-        log("AVISO: python-calamine nao instalado. openpyxl e MUITO mais lento.")
-        return "openpyxl"
+df_final = spark.table(full_table_name)
 
+print(f"Registos carregados: {df_final.count():,}")
 
-def full_table_name(table):
-    return catalog_name + "." + schema_name + "." + table
+df_final.printSchema()
 
+display(df_final.limit(100))
 
-def quoted_table_name(table):
-    return "`" + catalog_name + "`.`" + schema_name + "`.`" + table + "`"
-
-
-def list_tables_in_schema():
-    rows = spark.sql("SHOW TABLES IN " + catalog_name + "." + schema_name).collect()
-    nomes = []
-    for r in rows:
-        d = r.asDict()
-        nome = d.get("tableName") or d.get("table") or d.get("name")
-        if nome:
-            nomes.append(nome)
-    return nomes
-
-
-def table_exists(table):
-    return table in set(list_tables_in_schema())
-
-
-def wipe_table(table):
-    fqn = full_table_name(table)
-    qn = quoted_table_name(table)
-    if not table_exists(table):
-        log("Tabela nao existe (nada a limpar): " + fqn)
-        return
-    antes = None
-    try:
-        antes = spark.table(fqn).count()
-    except Exception:
-        antes = None
-    log("A limpar " + fqn + ((" (linhas atuais=" + "{:,}".format(antes) + ")") if antes is not None else ""))
-    for stmt in ("DROP TABLE IF EXISTS " + qn, "DROP TABLE IF EXISTS " + fqn):
-        try:
-            log("SQL: " + stmt)
-            spark.sql(stmt)
-            if not table_exists(table):
-                break
-        except Exception as exc:
-            log("DROP falhou: " + str(exc).split("\n")[0][:220])
-    if table_exists(table):
-        for stmt in ("DELETE FROM " + qn, "TRUNCATE TABLE " + qn):
-            try:
-                log("SQL: " + stmt)
-                spark.sql(stmt)
-            except Exception as exc:
-                log("Limpeza alternativa falhou: " + str(exc).split("\n")[0][:220])
-    if table_exists(table):
-        restantes = spark.table(fqn).count()
-        log("Tabela ainda existe apos limpeza. Linhas restantes: " + "{:,}".format(restantes))
-        if restantes > 0:
-            raise Exception("Nao foi possivel limpar " + fqn + " (" + "{:,}".format(restantes) + " linhas).")
-    else:
-        log("Tabela apagada: " + fqn)
-
-
-def drop_target_tables():
-    destinos = []
-    for item in FILE_MAPPINGS:
-        if item["table"] not in destinos:
-            destinos.append(item["table"])
-    log("")
-    log("=" * 80)
-    log("APAGAR TABELAS DE DESTINO")
-    log("=" * 80)
-    for table in destinos:
-        wipe_table(table)
-
-
-def reset_staging():
-    dest = to_local_path(staging_folder)
-    if RESET_STAGING_ALWAYS and os.path.exists(dest):
-        log("A limpar staging: " + dest)
-        shutil.rmtree(dest, ignore_errors=True)
-    os.makedirs(dest, exist_ok=True)
-    for item in FILE_MAPPINGS:
-        os.makedirs(os.path.join(dest, item["table"]), exist_ok=True)
-
-
-EXCEL_ENGINE = pick_excel_engine()
-log("Engine Excel: " + EXCEL_ENGINE)
-
-
-def list_sheets(local_copy):
-    xl = pd.ExcelFile(local_copy, engine=EXCEL_ENGINE)
-    try:
-        return list(xl.sheet_names)
-    finally:
-        xl.close()
-
-
-def choose_sheet(local_copy, preferred):
-    sheets = list_sheets(local_copy)
-    log("SHEETS: " + ", ".join(sheets))
-    if preferred and preferred in sheets:
-        return preferred
-    if not sheets:
-        raise Exception("Workbook sem sheets.")
-    if len(sheets) == 1:
-        return sheets[0]
-    scored = []
-    for name in sheets:
-        try:
-            probe = pd.read_excel(
-                local_copy, sheet_name=name, header=None, engine=EXCEL_ENGINE, dtype=object, nrows=30
-            )
-            filled = int(probe.notna().sum().sum())
-            scored.append((filled, probe.shape[1], name))
-        except Exception:
-            scored.append((0, 0, name))
-    scored.sort(reverse=True)
-    escolhida = scored[0][2]
-    log("Sheet auto (mais celulas preenchidas): " + escolhida + " " + str(scored))
-    return escolhida
-
-
-def detect_header_row(pdf_raw):
-    scan = min(len(pdf_raw), HEADER_SCAN_ROWS)
-    best_row, best_score = 0, -1
-    for r in range(scan):
-        filled = 0
-        textish = 0
-        for v in pdf_raw.iloc[r].tolist():
-            if v is None or (isinstance(v, float) and pd.isna(v)):
-                continue
-            text = str(v).strip()
-            if text == "" or text.lower() == "nan":
-                continue
-            filled += 1
-            if isinstance(v, str):
-                textish += 1
-        score = filled * 2 + textish
-        if score > best_score:
-            best_score = score
-            best_row = r
-    return best_row
-
-
-def forward_fill_headers(headers):
-    filled, last = [], ""
-    for h in headers:
-        if h:
-            last = h
-            filled.append(h)
-        else:
-            filled.append(last)
-    return filled
-
-
-def read_excel_fast(local_copy, source_file, preferred_sheet):
-    sheet_name = choose_sheet(local_copy, preferred_sheet)
-    log("Sheet escolhida: " + sheet_name)
-    with timed("read_excel " + source_file):
-        pdf_raw = pd.read_excel(
-            local_copy, sheet_name=sheet_name, header=None, engine=EXCEL_ENGINE, dtype=object
-        )
-    if pdf_raw.empty:
-        raise Exception("Ficheiro / sheet vazia: " + source_file)
-    header_row = detect_header_row(pdf_raw)
-    log(
-        "Header row="
-        + str(header_row)
-        + " colunas="
-        + str(pdf_raw.shape[1])
-        + " linhas_brutas="
-        + "{:,}".format(len(pdf_raw))
-    )
-    raw_headers = []
-    for v in pdf_raw.iloc[header_row].tolist():
-        if v is None or (isinstance(v, float) and pd.isna(v)):
-            raw_headers.append("")
-        else:
-            raw_headers.append(decode_cell(v) or "")
-    raw_headers = forward_fill_headers(raw_headers)
-    clean_headers = uniquify_names([sanitize_column_name(h) for h in raw_headers])
-    pdf = pdf_raw.iloc[header_row + 1 :].copy()
-    del pdf_raw
-    pdf.columns = clean_headers
-    pdf = pdf.dropna(how="all").reset_index(drop=True)
-    with timed("decode colunas object"):
-        for c in pdf.columns:
-            if pdf[c].dtype == object:
-                pdf[c] = decode_object_column(pdf[c])
-    pdf = aplicar_regras_negocio(pdf, source_file)
-    for c in pdf.columns:
-        if "flag" in _fold(c) or "conversao" in _fold(c):
-            vc = pdf[c].astype("string").value_counts(dropna=False).head(15)
-            log("Valores crus " + source_file + "." + c + ":")
-            for val, cnt in vc.items():
-                log("    " + repr(val) + " -> " + "{:,}".format(int(cnt)))
-    if CAST_ALL_TO_STRING:
-        with timed("cast staging para string"):
-            pdf = pdf.astype("string")
-            pdf = pdf.where(pdf.notna(), None)
-    pdf.attrs["sheet_name"] = sheet_name
-    pdf.attrs["header_row"] = header_row + 1
-    return pdf
-
-
-def parquet_path_for(target_table, source_file):
-    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", source_file)
-    if safe.lower().endswith(".xlsx"):
-        safe = safe[:-5]
-    elif safe.lower().endswith(".xls"):
-        safe = safe[:-4]
-    return os.path.join(to_local_path(staging_folder), target_table, safe + ".parquet")
-
-
-def stage_one_file(source_file, preferred_sheet, target_table, available_files):
-    if source_file not in available_files:
-        raise Exception("Ficheiro nao encontrado: " + source_file)
-    out_path = parquet_path_for(target_table, source_file)
-    if (
-        SKIP_EXISTING_PARQUET
-        and source_file not in FORCE_REPROCESS_FILES
-        and os.path.exists(out_path)
-        and os.path.getsize(out_path) > 0
-    ):
-        log("SKIP Excel: parquet ja existe -> " + out_path)
-        try:
-            import pyarrow.parquet as pq
-            pf = pq.ParquetFile(out_path)
-            n_rows = pf.metadata.num_rows
-            cols = [c for c in pf.schema_arrow.names if c not in ("source_file", "source_sheet", "header_row")]
-            log("  retoma parquet: " + "{:,}".format(n_rows) + " linhas")
-            return out_path, cols, n_rows, "", None
-        except Exception as exc:
-            log("Parquet existente ilegivel, a reprocessar Excel: " + str(exc).split("\n")[0][:180])
-    local_copy = None
-    try:
-        with timed("copia local " + source_file):
-            local_copy = copy_to_local_disk(available_files[source_file], source_file)
-        pdf = read_excel_fast(local_copy, source_file, preferred_sheet)
-        n_rows = len(pdf)
-        cols = list(pdf.columns)
-        log("Linhas lidas: " + "{:,}".format(n_rows) + "  campos: " + str(len(cols)))
-        if n_rows == 0:
-            raise Exception("Ficheiro sem linhas de dados: " + source_file)
-        sheet_name = pdf.attrs.get("sheet_name", "")
-        header_row = pdf.attrs.get("header_row", None)
-        pdf["source_file"] = source_file
-        pdf["source_sheet"] = sheet_name
-        pdf["header_row"] = int(header_row) if header_row is not None else None
-        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-        if os.path.exists(out_path):
-            os.remove(out_path)
-        with timed("to_parquet " + source_file):
-            pdf.to_parquet(out_path, engine="pyarrow", index=False, compression="snappy")
-        log("Parquet staging: " + out_path)
-        return out_path, cols, n_rows, sheet_name, header_row
-    finally:
-        if local_copy and os.path.exists(local_copy):
-            try:
-                os.remove(local_copy)
-            except Exception:
-                pass
-        gc.collect()
-
-
-if spark.sql("SHOW CATALOGS").filter("catalog = '" + catalog_name + "'").count() == 0:
-    raise Exception("Catalogo nao encontrado: " + catalog_name)
-if spark.sql("SHOW SCHEMAS IN " + catalog_name).filter("databaseName = '" + schema_name + "'").count() == 0:
-    raise Exception("Schema nao encontrado: " + schema_name)
-log("Catalogo e schema validados.")
-
-available_files = {f.name: f.path for f in dbutils.fs.ls(source_folder)}
-log("Ficheiros no volume: " + str(len(available_files)))
-
-drop_target_tables()
-reset_staging()
-
-by_table = defaultdict(list)
-for item in FILE_MAPPINGS:
-    by_table[item["table"]].append(item)
-
-processed_tables = []
-failed_files = []
-schema_report = []
-t_job = time.time()
-
-for target_table, items in by_table.items():
-    log("")
-    log("=" * 80)
-    log("TABELA " + target_table)
-    log("Ficheiros: " + str([i["file"] for i in items]))
-    log("=" * 80)
-    parquet_files = []
-    loaded_files = []
-    n_rows_total = 0
-    for item in items:
-        source_file = item["file"]
-        preferred_sheet = item.get("preferred_sheet")
-        log("")
-        log("-" * 80)
-        log("PROCESSAR " + source_file + " -> " + target_table)
-        log("-" * 80)
-        try:
-            out_path, cols, n_rows, sheet_name, header_row = stage_one_file(
-                source_file, preferred_sheet, target_table, available_files
-            )
-            parquet_files.append(out_path)
-            loaded_files.append(source_file)
-            n_rows_total += n_rows
-            schema_report.append(
-                {
-                    "file": source_file,
-                    "table": full_table_name(target_table),
-                    "n_cols": len(cols),
-                    "n_rows": n_rows,
-                    "columns": cols,
-                }
-            )
-        except Exception as e:
-            log("ERRO: " + source_file)
-            log(str(e))
-            failed_files.append((source_file, str(e)))
-    if not parquet_files:
-        log("Nenhum ficheiro valido para " + target_table + ".")
-        continue
-
-    fqn = full_table_name(target_table)
-    log(
-        "A gravar "
-        + "{:,}".format(n_rows_total)
-        + " linhas de "
-        + str(len(loaded_files))
-        + " ficheiro(s) em "
-        + fqn
-    )
-    stage_uri = staging_folder.rstrip("/") + "/" + target_table
-    with timed("spark.read.parquet + tipos + replace table " + target_table):
-        df_out = spark.read.option("mergeSchema", "true").parquet(stage_uri)
-        df_out = aplicar_tipos_spark(df_out)
-        df_out = df_out.withColumn("load_timestamp", F.current_timestamp())
-        tmp_view = "_tmp_load_" + target_table
-        df_out.createOrReplaceTempView(tmp_view)
-        qn = quoted_table_name(target_table)
-        wipe_table(target_table)
-        stmt = "CREATE OR REPLACE TABLE " + qn + " USING DELTA AS SELECT * FROM " + tmp_view
-        log("SQL: " + stmt)
-        try:
-            spark.sql(stmt)
-        except Exception as exc:
-            log("CREATE OR REPLACE falhou, fallback saveAsTable: " + str(exc).split("\n")[0][:220])
-            (
-                df_out.write.format("delta")
-                .mode("overwrite")
-                .option("overwriteSchema", "true")
-                .saveAsTable(fqn)
-            )
-        gravadas = spark.table(fqn).count()
-        log(
-            "Confirmacao overwrite "
-            + fqn
-            + ": "
-            + "{:,}".format(gravadas)
-            + " gravadas / "
-            + "{:,}".format(n_rows_total)
-            + " lidas"
-        )
-        if gravadas > n_rows_total * 2:
-            raise Exception("Possivel duplicacao em " + fqn)
-    log("Carga concluida: " + fqn)
-    processed_tables.append(fqn)
-
-log("")
-log("=" * 80)
-log("VALIDACAO FINAL")
-log("=" * 80)
-for table in processed_tables:
-    sdf = spark.table(table)
-    log("")
-    log("Tabela: " + table)
-    log("Registos: " + "{:,}".format(sdf.count()))
-    log("Schema:")
-    for field in sdf.schema.fields:
-        log("  - " + field.name + " : " + field.dataType.simpleString())
-    display(sdf.limit(20))
-
-log("")
-log("=" * 80)
-log("CAMPOS POR FICHEIRO")
-log("=" * 80)
-for item in schema_report:
-    log("")
-    log(item["file"] + " -> " + item["table"] + " linhas=" + "{:,}".format(item["n_rows"]))
-    for c in item["columns"]:
-        log("    - " + c + "  [" + classificar_coluna(c) + "]")
-
-log("")
-log("Tabelas carregadas: " + str(len(processed_tables)))
-log("Ficheiros com erro: " + str(len(failed_files)))
-log("Tempo total: " + "{:.1f}s".format(time.time() - t_job))
-if failed_files:
-    for ficheiro, erro in failed_files:
-        log(ficheiro)
-        log(erro)
-    raise Exception("Existem " + str(len(failed_files)) + " ficheiros com erro.")
-log("CARGA CONCLUIDA COM SUCESSO")
+print("Carga concluída com sucesso.")
