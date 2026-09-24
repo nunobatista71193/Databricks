@@ -1,217 +1,302 @@
 # ============================================================
-# CONFIGURAÇÃO
+# INGESTAO BDA_AGENTES -> Delta
 # ============================================================
 
+import importlib
+import os
 import re
-import pandas as pd
+import shutil
+import subprocess
+import sys
+import unicodedata
 
-from pyspark.sql.functions import (
-    current_timestamp,
-    lit
-)
+import pandas as pd
+from pyspark.sql import functions as F
+
+
+def log(msg=""):
+    print(msg, flush=True)
+
+
+def ensure_pkg(module_name, pip_name):
+    try:
+        importlib.import_module(module_name)
+        return True
+    except Exception:
+        log("A instalar " + pip_name + " ...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", pip_name])
+            importlib.invalidate_caches()
+            importlib.import_module(module_name)
+            log("Instalado: " + pip_name)
+            return True
+        except Exception as exc:
+            log("Falha a instalar " + pip_name + ": " + str(exc).split("\n")[0][:220])
+            return False
+
+
+ensure_pkg("pyarrow", "pyarrow")
+ensure_pkg("python_calamine", "python-calamine")
+
 
 catalog_name = "agpt_insurance_dv_catalog"
 schema_name = "wkb_bus_operations_claimsmotor"
 table_name = "raw_bda_agentes_sas"
-
-full_table_name = f"{catalog_name}.{schema_name}.{table_name}"
+fqn = catalog_name + "." + schema_name + "." + table_name
+qn = "`" + catalog_name + "`.`" + schema_name + "`.`" + table_name + "`"
 
 source_file = "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/BDA_AGENTES.xlsx"
+source_file_name = "BDA_AGENTES.xlsx"
 
-print(f"Tabela destino: {full_table_name}")
-print(f"Ficheiro origem: {source_file}")
+LOCAL_TMP = "/local_disk0/tmp/excel_ingest" if os.path.isdir("/local_disk0/tmp") else "/tmp/excel_ingest"
+os.makedirs(LOCAL_TMP, exist_ok=True)
 
-# ============================================================
-# FUNÇÕES AUXILIARES
-# ============================================================
+log("Tabela destino: " + fqn)
+log("Ficheiro origem: " + source_file)
 
-def decode_excel_column_name(name):
 
-    if name is None:
-        return ""
+# ------------------------------------------------------------
+# Nomes de colunas
+# ------------------------------------------------------------
 
-    return re.sub(
-        r"_x([0-9A-Fa-f]{4})_",
-        lambda m: chr(int(m.group(1), 16)),
-        str(name)
-    )
+_XML_ESCAPE_RE = re.compile(r"_x([0-9A-Fa-f]{4,8})_", re.IGNORECASE)
+
+
+def decode_excel_xml(value):
+    if value is None or not isinstance(value, str):
+        return value
+
+    def _to_char(match):
+        try:
+            return chr(int(match.group(1), 16))
+        except (ValueError, OverflowError):
+            return match.group(0)
+
+    text = _XML_ESCAPE_RE.sub(_to_char, value)
+    return text.replace("\xa0", " ").replace("\u200b", "")
 
 
 def sanitize_column_name(name):
-
-    novo_nome = decode_excel_column_name(name)
-
-    substituicoes = {
-        "º": "o",
-        "ª": "a",
-        "%": "pct",
-        "/": "_",
-        "\\": "_",
-        "#": "num",
-        "€": "eur",
-        "$": "usd",
-        "&": "and",
-        "-": "_",
-        ".": "_",
-        ":": "_"
-    }
-
-    for original, substituto in substituicoes.items():
-        novo_nome = novo_nome.replace(original, substituto)
-
-    novo_nome = re.sub(r"[ ,;{}()\n\t=]", "_", novo_nome)
-    novo_nome = re.sub(r"_+", "_", novo_nome)
-
-    novo_nome = novo_nome.strip("_").lower()
-
-    if not novo_nome:
-        novo_nome = "coluna_sem_nome"
-
-    return novo_nome
+    nome = decode_excel_xml(str(name) if name is not None else "")
+    nome = nome.strip()
+    if nome.lower().startswith("unnamed") or nome.lower() in ("", "nan", "none", "nat"):
+        return "coluna_sem_nome"
+    for old, new in {
+        "º": "o", "ª": "a", "%": "pct", "/": "_", "\\": "_", "#": "num",
+        "€": "eur", "$": "usd", "&": "e", "-": "_", ".": "_", ":": "_",
+        "?": "", "!": "", "*": "", "+": "mais", "'": "", '"': "",
+    }.items():
+        nome = nome.replace(old, new)
+    nome = re.sub(r"[ ,;{}()\n\t\r=]", "_", nome)
+    nome = re.sub(r"_+", "_", nome).strip("_")
+    nome = nome.lower()
+    if nome == "":
+        nome = "coluna_sem_nome"
+    if nome[0].isdigit():
+        nome = "c_" + nome
+    return nome
 
 
-def sanitize_dataframe_columns(df):
-
-    nomes_originais = df.columns
-    nomes_novos = []
-    contador = {}
-
-    for nome in nomes_originais:
-
-        nome_limpo = sanitize_column_name(nome)
-
-        if nome_limpo in contador:
-            contador[nome_limpo] += 1
-            nome_limpo = f"{nome_limpo}_{contador[nome_limpo]}"
+def uniquify_names(names):
+    usados, out = {}, []
+    for nome in names:
+        if nome not in usados:
+            usados[nome] = 0
+            out.append(nome)
         else:
-            contador[nome_limpo] = 0
-
-        nomes_novos.append(nome_limpo)
-
-    for original, novo in zip(nomes_originais, nomes_novos):
-
-        if original != novo:
-            df = df.withColumnRenamed(original, novo)
-
-    return df
+            usados[nome] += 1
+            out.append(nome + "_" + str(usados[nome]))
+    return out
 
 
-# ============================================================
-# VALIDAR CATÁLOGO
-# ============================================================
+def _fold(name):
+    n = unicodedata.normalize("NFD", str(name or ""))
+    n = "".join(ch for ch in n if unicodedata.category(ch) != "Mn")
+    return n.lower()
 
-catalog_exists = (
-    spark.sql("SHOW CATALOGS")
-         .filter(f"catalog = '{catalog_name}'")
-         .count()
+
+# ------------------------------------------------------------
+# Classificacao de tipos pelo nome + amostra
+# ------------------------------------------------------------
+
+DATE_TOKENS = (
+    "data", "dt_", "_dt", "nascim", "fnacim", "aniv",
+    "inicio", "fim", "validade", "emissao", "registo",
+)
+INT_TOKENS = (
+    "idade", "ano", "n_agente", "num_agente", "codigo_agente",
+    "cod_agente", "n_agentes", "porta", "cp4", "codpostal_4",
+)
+ID_STRING_TOKENS = (
+    "nif", "nipc", "niss", "iban", "email", "telefone", "telemovel",
+    "cod_postal", "codigo_postal", "cdpostal", "cp7",
 )
 
-if catalog_exists == 0:
-    raise Exception(f"Catálogo não encontrado: {catalog_name}")
 
-print(f"OK - Catálogo encontrado: {catalog_name}")
+def classificar_coluna(nome, series=None):
+    n = _fold(nome)
+    if any(tok in n for tok in ID_STRING_TOKENS):
+        return "string"
+    if n == "fnacim" or any(tok in n for tok in DATE_TOKENS):
+        return "date"
+    if any(tok in n for tok in INT_TOKENS) and "data" not in n:
+        return "int"
+    if series is not None:
+        amostra = [v for v in series.dropna().astype(str).head(80).tolist() if str(v).strip() not in ("", "nan", "None", "NaT")]
+        if amostra:
+            dateish = 0
+            intish = 0
+            for v in amostra:
+                s = str(v).strip()
+                if re.match(r"^\d{4}-\d{2}-\d{2}", s) or re.match(r"^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$", s):
+                    dateish += 1
+                elif re.match(r"^-?\d+(\.0+)?$", s):
+                    intish += 1
+            if dateish >= max(3, int(0.6 * len(amostra))):
+                return "date"
+            if intish >= max(3, int(0.8 * len(amostra))):
+                return "int"
+    return "string"
 
-# ============================================================
-# VALIDAR SCHEMA
-# ============================================================
 
-schema_exists = (
-    spark.sql(f"SHOW SCHEMAS IN {catalog_name}")
-         .filter(f"databaseName = '{schema_name}'")
-         .count()
-)
+def _sql_ident(colname):
+    return "`" + str(colname).replace("`", "") + "`"
 
-if schema_exists == 0:
-    raise Exception(
-        f"Schema não encontrado: {catalog_name}.{schema_name}"
+
+def _sql_num(ident):
+    raw = "regexp_replace(trim(cast(" + ident + " as string)), '[\\u00A0 €$]', '')"
+    raw = "nullif(" + raw + ", '')"
+    raw = (
+        "case"
+        " when " + raw + " is null then null"
+        " when lower(" + raw + ") in ('nan','none','nat','null','-') then null"
+        " when " + raw + " like '%,%' then regexp_replace(" + raw + ", ',', '.')"
+        " else " + raw + " end"
     )
+    raw = "regexp_replace(" + raw + ", '[^0-9.-]', '')"
+    raw = "regexp_replace(" + raw + ", '\\\\.0+$', '')"
+    raw = "regexp_replace(" + raw + ", '\\\\.$', '')"
+    return "case when " + raw + " in ('', '.', '-', '-.') then null else " + raw + " end"
 
-print(f"OK - Schema encontrado: {schema_name}")
 
-# ============================================================
-# LEITURA EXCEL
-# ============================================================
+def aplicar_tipos_spark(df, kinds):
+    selects = []
+    for c in df.columns:
+        ident = _sql_ident(c)
+        kind = kinds.get(c, "string")
+        if c in ("source_file", "source_sheet", "load_timestamp"):
+            selects.append(ident)
+            continue
+        if kind == "date":
+            txt = "trim(cast(" + ident + " as string))"
+            selects.append(
+                "coalesce("
+                "try_cast(" + ident + " as date),"
+                "to_date(" + txt + ", 'yyyy-MM-dd'),"
+                "to_date(" + txt + ", 'dd/MM/yyyy'),"
+                "to_date(" + txt + ", 'dd-MM-yyyy'),"
+                "to_date(" + txt + ", 'yyyy/MM/dd'),"
+                "to_date(" + txt + ", 'dd.MM.yyyy')"
+                ") as " + ident
+            )
+        elif kind == "int":
+            selects.append("try_cast(" + _sql_num(ident) + " as int) as " + ident)
+        else:
+            selects.append("cast(" + ident + " as string) as " + ident)
+    return df.selectExpr(*selects)
 
-print("A ler Excel...")
 
-pdf = pd.read_excel(
-    source_file,
-    engine="openpyxl"
-)
+# ------------------------------------------------------------
+# Validar catalogo / schema
+# ------------------------------------------------------------
 
-pdf = pdf.where(pd.notnull(pdf), None)
+if spark.sql("SHOW CATALOGS").filter("catalog = '" + catalog_name + "'").count() == 0:
+    raise Exception("Catalogo nao encontrado: " + catalog_name)
+if spark.sql("SHOW SCHEMAS IN " + catalog_name).filter("databaseName = '" + schema_name + "'").count() == 0:
+    raise Exception("Schema nao encontrado: " + catalog_name)
+log("OK - catalogo e schema encontrados")
 
-print(f"Registos encontrados: {len(pdf):,}")
 
-if len(pdf) == 0:
+# ------------------------------------------------------------
+# Ler Excel (calamine) via copia local
+# ------------------------------------------------------------
+
+def pick_engine():
+    try:
+        import python_calamine  # noqa: F401
+        return "calamine"
+    except Exception:
+        log("AVISO: a usar openpyxl (mais lento)")
+        return "openpyxl"
+
+
+engine = pick_engine()
+log("Engine Excel: " + engine)
+
+local_copy = os.path.join(LOCAL_TMP, source_file_name)
+src_path = source_file.replace("dbfs:", "", 1) if source_file.startswith("dbfs:") else source_file
+if os.path.exists(local_copy):
+    os.remove(local_copy)
+with open(src_path, "rb") as src, open(local_copy, "wb") as dst:
+    shutil.copyfileobj(src, dst, length=8 * 1024 * 1024)
+
+xl = pd.ExcelFile(local_copy, engine=engine)
+sheets = list(xl.sheet_names)
+xl.close()
+log("SHEETS: " + ", ".join(sheets))
+sheet_name = sheets[0]
+log("Sheet escolhida: " + sheet_name)
+
+pdf = pd.read_excel(local_copy, sheet_name=sheet_name, engine=engine, dtype=object)
+if pdf.empty:
     raise Exception("Ficheiro sem dados.")
 
-# ============================================================
-# CRIAR DATAFRAME SPARK
-# ============================================================
+pdf.columns = uniquify_names([sanitize_column_name(c) for c in pdf.columns])
+for c in pdf.columns:
+    if pdf[c].dtype == object:
+        pdf[c] = pdf[c].map(lambda v: decode_excel_xml(v) if isinstance(v, str) else v)
 
-df = spark.createDataFrame(pdf)
+pdf = pdf.dropna(how="all").reset_index(drop=True)
+log("Registos encontrados: " + "{:,}".format(len(pdf)))
+log("Colunas: " + str(list(pdf.columns)))
 
-# ============================================================
-# SANITIZAR COLUNAS
-# ============================================================
+kinds = {c: classificar_coluna(c, pdf[c]) for c in pdf.columns}
+log("Tipos detetados:")
+for c, k in kinds.items():
+    log("  - " + c + " : " + k)
 
-df = sanitize_dataframe_columns(df)
+# Staging sempre string — evita o erro Arrow no createDataFrame
+pdf_stage = pdf.astype("string")
+pdf_stage = pdf_stage.where(pdf_stage.notna(), None)
+pdf_stage["source_file"] = source_file_name
+pdf_stage["source_sheet"] = sheet_name
 
-print("Schema inferido:")
+stage_path = os.path.join(LOCAL_TMP, "BDA_AGENTES_stage.parquet")
+if os.path.exists(stage_path):
+    os.remove(stage_path)
+pdf_stage.to_parquet(stage_path, engine="pyarrow", index=False, compression="snappy")
 
+df = spark.read.parquet(stage_path)
+df = aplicar_tipos_spark(df, kinds)
+df = df.withColumn("load_timestamp", F.current_timestamp())
+
+log("Schema Spark a gravar:")
 df.printSchema()
 
-# ============================================================
-# COLUNAS TÉCNICAS
-# ============================================================
+spark.sql("DROP TABLE IF EXISTS " + qn)
+log("Tabela anterior removida.")
 
-df = (
-    df
-    .withColumn(
-        "source_file",
-        lit("BDA_AGENTES.xlsx")
-    )
-    .withColumn(
-        "load_timestamp",
-        current_timestamp()
-    )
-)
+df.createOrReplaceTempView("_tmp_bda_agentes")
+try:
+    spark.sql("CREATE OR REPLACE TABLE " + qn + " USING DELTA AS SELECT * FROM _tmp_bda_agentes")
+except Exception as exc:
+    log("CREATE OR REPLACE falhou, fallback saveAsTable: " + str(exc).split("\n")[0][:220])
+    df.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(fqn)
 
-# ============================================================
-# DROP TABELA EXISTENTE
-# ============================================================
-
-spark.sql(
-    f"DROP TABLE IF EXISTS {full_table_name}"
-)
-
-print("Tabela anterior removida.")
-
-# ============================================================
-# ESCRITA DELTA
-# ============================================================
-
-(
-    df.write
-      .format("delta")
-      .mode("overwrite")
-      .option("overwriteSchema", "true")
-      .saveAsTable(full_table_name)
-)
-
-print("Tabela criada.")
-
-# ============================================================
-# VALIDAÇÃO
-# ============================================================
-
-df_final = spark.table(full_table_name)
-
-print(f"Registos carregados: {df_final.count():,}")
-
-df_final.printSchema()
-
+df_final = spark.table(fqn)
+log("Registos carregados: " + "{:,}".format(df_final.count()))
+log("Schema final:")
+for field in df_final.schema.fields:
+    log("  - " + field.name + " : " + field.dataType.simpleString())
 display(df_final.limit(100))
-
-print("Carga concluída com sucesso.")
+log("Carga concluida com sucesso.")
