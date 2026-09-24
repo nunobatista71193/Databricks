@@ -1,63 +1,12 @@
-Engine Excel: calamine
-Catalogo e schema validados.
-Ficheiros no volume: 83
-
-================================================================================
-APAGAR TABELAS DE DESTINO
-================================================================================
-Tabela nao existe (nada a limpar): agpt_insurance_dv_catalog.wkb_bus_operations_price.ags_overview
-Tabela nao existe (nada a limpar): agpt_insurance_dv_catalog.wkb_bus_operations_price.ocs_overview
-Tabela nao existe (nada a limpar): agpt_insurance_dv_catalog.wkb_bus_operations_price.sd_overview
-
-================================================================================
-TABELA ags_overview
-Ficheiros: ['WORK_sim_ags_final.xlsx', 'WORK_sim_ags_final_2025.xlsx', 'WORK_sim_ags_final_2024.xlsx', 'WORK_sim_ags_final_2023.xlsx', 'WORK_sim_ags_final_2022.xlsx', 'WORK_sim_ags_final_2021.xlsx']
-================================================================================
-
---------------------------------------------------------------------------------
-PROCESSAR WORK_sim_ags_final.xlsx -> ags_overview
---------------------------------------------------------------------------------
-SKIP Excel: parquet ja existe -> /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/ags_overview/WORK_sim_ags_final.parquet
-  retoma parquet: 704,943 linhas
-
---------------------------------------------------------------------------------
-PROCESSAR WORK_sim_ags_final_2025.xlsx -> ags_overview
---------------------------------------------------------------------------------
-SKIP Excel: parquet ja existe -> /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/ags_overview/WORK_sim_ags_final_2025.parquet
-  retoma parquet: 913,294 linhas
-
---------------------------------------------------------------------------------
-PROCESSAR WORK_sim_ags_final_2024.xlsx -> ags_overview
---------------------------------------------------------------------------------
-SKIP Excel: parquet ja existe -> /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/ags_overview/WORK_sim_ags_final_2024.parquet
-  retoma parquet: 925,369 linhas
-
---------------------------------------------------------------------------------
-PROCESSAR WORK_sim_ags_final_2023.xlsx -> ags_overview
---------------------------------------------------------------------------------
-SKIP Excel: parquet ja existe -> /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/ags_overview/WORK_sim_ags_final_2023.parquet
-  retoma parquet: 795,401 linhas
-
---------------------------------------------------------------------------------
-PROCESSAR WORK_sim_ags_final_2022.xlsx -> ags_overview
---------------------------------------------------------------------------------
-SKIP Excel: parquet ja existe -> /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/ags_overview/WORK_sim_ags_final_2022.parquet
-  retoma parquet: 593,785 linhas
-
---------------------------------------------------------------------------------
-PROCESSAR WORK_sim_ags_final_2021.xlsx -> ags_overview
---------------------------------------------------------------------------------
-SKIP Excel: parquet ja existe -> /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_price/motor/99_staging_ingest/ags_overview/WORK_sim_ags_final_2021.parquet
-  retoma parquet: 467,797 linhas
-A gravar 4,400,589 linhas de 6 ficheiro(s) em agpt_insurance_dv_catalog.wkb_bus_operations_price.ags_overview
-Tipos aplicados:
-  decimal(18,2): ['vt_valor_seguro', 'vt_pesobruto', 'vt_tara', 'vt_racio_peso_potencia', 'premio_total', 'QUA_PREMIO_2', 'PREMIO_FRAC']
-  int:           ['ano_sim', 'anomes_sim', 'semana_sim', 'confinamento', 'diff_dias_sim_risco', 'diff_dias_sim_conversao', 'vt_CC', 'vt_CV', 'CVE_CAIXA', 'CVE_PORTAS', 'CVE_ZONA_DP', 'CVE_ZONA_RC', 'vt_num_lugares', 'vt_anosviatura', 'num_sin_ult_5anos', 'num_anos_sem_sinistros', 'num_sin_ult_ano', 'NUM_SINISTROS_ULT_5_ANOS', 'num_anos_com_seguro', 'idade_condutor', 'anos_carta', 'CVE_BM_INICIAL', 'NUM_ISP_DESC', 'header_row']
-  flag->int:     ['flag_simulacao', 'flag_conversao', 'flag_promocode_SD', 'ALARME_DE_SEGURANCA', 'APOIO_ESTACIONAMENTO', 'MELHORIA_VISIBILIDADE', 'CONTROLE_CONDUCAO', 'CONTROLE_TRAVAGEM', 'flag_premio', 'target_ageas', 'Parc_PO_Motor20']
-  string:        28 colunas
-  [tempo] spark.read.parquet + tipos + replace table ags_overview: 0.9s
+Tabela destino: agpt_insurance_dv_catalog.wkb_bus_operations_claimsmotor.raw_bda_agentes_sas
+Ficheiro origem: /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/BDA_AGENTES.xlsx
+OK - Catálogo encontrado: agpt_insurance_dv_catalog
+OK - Schema encontrado: wkb_bus_operations_claimsmotor
+A ler Excel...
+/local_disk0/.ephemeral_nfs/envs/pythonEnv-41255c1a-9b59-4dcf-aa45-06c280695593/lib/python3.12/site-packages/openpyxl/styles/stylesheet.py:237: UserWarning: Workbook contains no default style, apply openpyxl's default
+  warn("Workbook contains no default style, apply openpyxl's default")
+Registos encontrados: 5,095
 
 
-
-[UNRESOLVED_ROUTINE] Cannot resolve routine `normalize` on search path [`system`.`session`, `system`.`builtin`, `system`.`ai`, `agpt_insurance_dv_catalog`.`default`].
-Verify the spelling of `normalize`, check that the routine exists, and confirm you have `USE` privilege on the catalog and schema, and EXECUTE on the routine. SQLSTATE: 42883
+PySparkTypeError: Exception thrown when converting pandas.Series (object) with name 'FNACIM' to Arrow Array (None).
+[Trace ID: 00-1edbd59af932898178232729ea9c7b63-1cc4be0a6fb1cd0a-00]
