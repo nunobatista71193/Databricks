@@ -1,57 +1,49 @@
-from pyspark.sql import functions as F, types as T
+wb = openpyxl.load_workbook(FICHEIRO, data_only=True)   # lê valores calculados, não fórmulas
+sheets = SHEETS_FILTRO or wb.sheetnames
+print(f"{len(wb.sheetnames)} sheets no ficheiro; a processar {len(sheets)}")
 
+if not DRY_RUN:
+    spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{CATALOGO}`.`{SCHEMA}`")
 
-def build_long(p, sheet_name):
-    meta_keys = list(p["meta"].keys())
-    dim_names = [n for n, _, _ in p["dims"]]
-    schema = T.StructType(
-        [T.StructField(k, T.StringType()) for k in meta_keys]
-        + [T.StructField(n, T.StringType()) for n in dim_names]
-        + [T.StructField("cobertura_cod", T.StringType()),
-           T.StructField("cobertura", T.StringType()),
-           T.StructField("metrica", T.StringType()),
-           T.StructField("valor", T.DoubleType()),
-           T.StructField("valor_original", T.StringType())]
-    )
-    meta_vals = [p["meta"][k] for k in meta_keys]
-    rows = []
-    for row in p["dados"]:
-        dvals = [to_str(row[c]) for _, c, _ in p["dims"]]
-        for c, cob, met in p["valores"]:
-            cod, desc = split_cobertura(cob)
-            raw = row[c]
-            rows.append(tuple(meta_vals + dvals + [cod, desc, met, to_double(raw), to_str(raw)]))
-    return spark.createDataFrame(rows, schema)
+resultado, erros = [], []
 
+for sh in sheets:
+    tabela = f"`{CATALOGO}`.`{SCHEMA}`.`{PREFIXO}{norm(sh)}`"
+    try:
+        ws = wb[sh]
+        if ws.sheet_state != "visible" and not SHEETS_FILTRO:
+            print(f"⏭  {sh}: sheet oculta, ignorada")
+            continue
 
-def build_wide(p, sheet_name):
-    meta_keys = list(p["meta"].keys())
-    dim_names = [n for n, _, _ in p["dims"]]
-    val_names = []
-    for c, cob, met in p["valores"]:
-        cod, _ = split_cobertura(cob)
-        val_names.append("__".join(x for x in (norm(cod), norm(met)) if x) or "valor")
-    todos = dedupe(meta_keys + dim_names + val_names)
-    nm, nd = len(meta_keys), len(dim_names)
-    meta_n, dim_n, val_n = todos[:nm], todos[nm:nm + nd], todos[nm + nd:]
+        p = parse_sheet(ws, ANCORA_CAB, ANCORA_META)
+        if not p["dados"]:
+            raise ValueError("Sem linhas de dados abaixo do cabeçalho")
 
-    schema = T.StructType(
-        [T.StructField(k, T.StringType()) for k in meta_n]
-        + [T.StructField(n, T.StringType()) for n in dim_n]
-        + [T.StructField(n, T.DoubleType()) for n in val_n]
-    )
-    meta_vals = [p["meta"][k] for k in meta_keys]
-    rows = [tuple(meta_vals
-                  + [to_str(row[c]) for _, c, _ in p["dims"]]
-                  + [to_double(row[c]) for c, _, _ in p["valores"]])
-            for row in p["dados"]]
-    df = spark.createDataFrame(rows, schema)
-    comentarios = {n: f"{cob} | {met or ''}" for n, (_, cob, met) in zip(val_n, p["valores"])}
-    return df, comentarios
+        comentarios = {}
+        if FORMATO == "long" and p["valores"]:
+            df = build_long(p, sh)
+        else:
+            df, comentarios = build_wide(p, sh)
+        df = add_auditoria(df, sh)
 
+        n = df.count()
+        n_nulos = df.filter(F.col("valor").isNull()).count() if "valor" in df.columns else None
+        print(f"✔ {sh} -> {tabela} | meta={p['meta']} | dims={[d[0] for d in p['dims']]} "
+              f"| colunas_valor={len(p['valores'])} | linhas_excel={len(p['dados'])} | linhas_tabela={n}"
+              + (f" | valores_nulos={n_nulos}" if n_nulos else ""))
 
-def add_auditoria(df, sheet_name):
-    return (df
-            .withColumn("sheet_origem", F.lit(sheet_name))
-            .withColumn("ficheiro_origem", F.lit(FICHEIRO))
-            .withColumn("dt_carga", F.current_timestamp()))
+        if DRY_RUN:
+            display(df.limit(20))
+        else:
+            (df.write.format("delta")
+               .mode("overwrite")
+               .option("overwriteSchema", "true")
+               .saveAsTable(tabela))
+            spark.sql(f"COMMENT ON TABLE {tabela} IS 'Origem: {FICHEIRO.replace(chr(39), '')} | sheet: {sh.replace(chr(39), '')}'")
+            for col, txt in comentarios.items():
+                spark.sql(f"ALTER TABLE {tabela} ALTER COLUMN `{col}` COMMENT '{str(txt).replace(chr(39), '')}'")
+
+        resultado.append((sh, tabela, n, "OK" if not DRY_RUN else "DRY_RUN"))
+    except Exception as e:
+        print(f"✘ {sh}: {e}")
+        erros.append((sh, tabela, 0, f"ERRO: {e}"))
