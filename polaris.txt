@@ -30,13 +30,13 @@
 
 dbutils.library.restartPython()
 
-# COMMAND ----------
+# COMMAND ----------  
 
 # DBTITLE 1,Parâmetros
 dbutils.widgets.text("ficheiro", "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/tarif_new.xlsx", "Ficheiro Excel")
-dbutils.widgets.text("catalogo_destino", "xxxx", "Catálogo destino")
-dbutils.widgets.text("schema_destino", "xxxx", "Schema destino")
-dbutils.widgets.text("prefixo_tabela", "tarif_", "Prefixo das tabelas")
+dbutils.widgets.text("catalogo_destino", "agpt_insurance_dv_catalog", "Catálogo destino")
+dbutils.widgets.text("schema_destino", "wkb_bus_operations_claimsmotor", "Schema destino")
+dbutils.widgets.text("prefixo_tabela", "wrk_polaris_tarif_", "Prefixo das tabelas")
 dbutils.widgets.dropdown("formato", "long", ["long", "wide"], "Formato")
 dbutils.widgets.text("sheets", "", "Sheets (vazio = todas; separadas por vírgula)")
 dbutils.widgets.text("ancora_cabecalho", "Ramo", "Texto da 1ª coluna do cabeçalho")
