@@ -1,31 +1,156 @@
-%pip install openpyxl
+import re
+import unicodedata
+import openpyxl
 
 
+def is_empty(v):
+    return v is None or (isinstance(v, str) and v.strip() == "")
 
 
-dbutils.library.restartPython()
+def norm(s):
+    """Normaliza texto para nome de coluna/tabela: sem acentos, minúsculas, só [a-z0-9_]."""
+    s = "" if s is None else str(s)
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
+    s = re.sub(r"[^0-9a-zA-Z]+", "_", s).strip("_").lower()
+    if s and s[0].isdigit():
+        s = "c_" + s
+    return s
 
 
+def dedupe(nomes):
+    vistos, out = {}, []
+    for n in nomes:
+        n = n or "col"
+        if n in vistos:
+            vistos[n] += 1
+            out.append(f"{n}_{vistos[n]}")
+        else:
+            vistos[n] = 0
+            out.append(n)
+    return out
 
-dbutils.widgets.text("ficheiro", "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/tarif_new.xlsx", "Ficheiro Excel")
-dbutils.widgets.text("catalogo_destino", "agpt_insurance_dv_catalog", "Catálogo destino")
-dbutils.widgets.text("schema_destino", "wkb_bus_operations_claimsmotor", "Schema destino")
-dbutils.widgets.text("prefixo_tabela", "wrk_polaris_tarif_", "Prefixo das tabelas")
-dbutils.widgets.dropdown("formato", "long", ["long", "wide"], "Formato")
-dbutils.widgets.text("sheets", "", "Sheets (vazio = todas; separadas por vírgula)")
-dbutils.widgets.text("ancora_cabecalho", "Ramo", "Texto da 1ª coluna do cabeçalho")
-dbutils.widgets.text("ancora_metadados", "Ciclo,Tipo,Tarifa", "Etiquetas possíveis da linha de metadados (vírgula)")
-dbutils.widgets.dropdown("dry_run", "sim", ["sim", "nao"], "Só pré-visualizar (não escreve)")
 
-FICHEIRO      = dbutils.widgets.get("ficheiro")
-CATALOGO      = dbutils.widgets.get("catalogo_destino")
-SCHEMA        = dbutils.widgets.get("schema_destino")
-PREFIXO       = dbutils.widgets.get("prefixo_tabela")
-FORMATO       = dbutils.widgets.get("formato")
-SHEETS_FILTRO = [s.strip() for s in dbutils.widgets.get("sheets").split(",") if s.strip()]
-ANCORA_CAB    = dbutils.widgets.get("ancora_cabecalho")
-ANCORA_META   = [s.strip() for s in dbutils.widgets.get("ancora_metadados").split(",") if s.strip()]
-DRY_RUN       = dbutils.widgets.get("dry_run") == "sim"
+def to_str(v):
+    """Dimensões como texto; 701.0 -> '701'."""
+    if is_empty(v):
+        return None
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v).strip()
 
-print(f"Ficheiro : {FICHEIRO}")
-print(f"Destino  : {CATALOGO}.{SCHEMA}.{PREFIXO}<sheet>  | formato={FORMATO} | dry_run={DRY_RUN}")
+
+def to_double(v):
+    """Valores numéricos; aceita '0,00000000', '1.234,56', '5%'."""
+    if is_empty(v):
+        return None
+    if isinstance(v, bool):
+        return float(v)
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip().replace(" ", "")
+    pct = s.endswith("%")
+    s = s.rstrip("%")
+    if "," in s and "." in s:
+        s = s.replace(".", "").replace(",", ".")
+    else:
+        s = s.replace(",", ".")
+    try:
+        x = float(s)
+        return x / 100 if pct else x
+    except ValueError:
+        return None
+
+
+def sheet_to_grid(ws):
+    """Lê a sheet para lista de listas, propagando o valor das células unidas (merged)."""
+    grid = [list(r) for r in ws.iter_rows(values_only=True)]
+    for rng in ws.merged_cells.ranges:
+        v = ws.cell(rng.min_row, rng.min_col).value
+        for r in range(rng.min_row, rng.max_row + 1):
+            for c in range(rng.min_col, rng.max_col + 1):
+                if r - 1 < len(grid) and c - 1 < len(grid[r - 1]):
+                    grid[r - 1][c - 1] = v
+    return grid
+
+
+def find_cell(grid, texto, max_linhas=50):
+    alvo = norm(texto)
+    for r, row in enumerate(grid[:max_linhas]):
+        for c, v in enumerate(row):
+            if not is_empty(v) and norm(v) == alvo:
+                return r, c
+    return None
+
+
+def split_cobertura(txt):
+    """'RCO-Responsabilidade Civil Obrigatória' -> ('RCO', 'Responsabilidade Civil Obrigatória')."""
+    if is_empty(txt):
+        return None, None
+    txt = str(txt).strip()
+    m = re.match(r"^\s*([A-Za-z0-9_]+)\s*-\s*(.+)$", txt)
+    return (m.group(1), m.group(2).strip()) if m else (txt, txt)
+
+
+def parse_sheet(ws, ancora_cab="Ramo", ancora_meta=("Ciclo",)):
+    grid = sheet_to_grid(ws)
+    if not grid:
+        raise ValueError("Sheet vazia")
+    ncols = max(len(r) for r in grid)
+    grid = [r + [None] * (ncols - len(r)) for r in grid]
+
+    # --- cabeçalho
+    pos = find_cell(grid, ancora_cab)
+    if pos is None:
+        raise ValueError(f"Não encontrei a célula '{ancora_cab}' (cabeçalho)")
+    h_row, h_col = pos
+    header = grid[h_row]
+    cov_row = grid[h_row - 1] if h_row > 0 else [None] * ncols
+
+    # --- metadados (linha com Ciclo/Tipo/Tarifa e valores na linha abaixo)
+    meta = {}
+    if isinstance(ancora_meta, str):
+        ancora_meta = [ancora_meta]
+    mpos = next((p for p in (find_cell(grid[:h_row], a) for a in ancora_meta) if p), None)
+    if mpos is not None and mpos[0] + 1 < h_row:
+        mr = mpos[0]
+        for c, lab in enumerate(grid[mr]):
+            if not is_empty(lab):
+                meta[norm(lab)] = to_str(grid[mr + 1][c])
+
+    # --- coluna de VALOR = tem cobertura por cima; a sub-linha ('BV-Valor Base') pode estar vazia
+    RE_COB = re.compile(r"^\s*[A-Z0-9_]{2,8}\s*-")
+
+    def tem_cobertura(c):
+        v = cov_row[c]
+        if is_empty(v):
+            return False
+        if v == header[c]:                       # célula unida na vertical
+            return bool(RE_COB.match(str(v)))
+        return True
+
+    first_val = next((c for c in range(h_col, ncols) if tem_cobertura(c)), None)
+    fim_dims = first_val if first_val is not None else ncols
+
+    dims_idx = [c for c in range(h_col, fim_dims) if not is_empty(header[c])]
+    dims = list(zip(dedupe([norm(header[c]) for c in dims_idx]), dims_idx, [header[c] for c in dims_idx]))
+
+    valores = []
+    if first_val is not None:
+        for c in range(first_val, ncols):
+            if not tem_cobertura(c):
+                continue
+            met = header[c]
+            met = None if is_empty(met) or met == cov_row[c] else str(met).strip()
+            valores.append((c, cov_row[c], met))
+
+    # --- dados: até à primeira linha totalmente vazia
+    cols_uteis = [c for _, c, _ in dims] + [c for c, _, _ in valores]
+    dados = []
+    for r in range(h_row + 1, len(grid)):
+        row = grid[r]
+        if all(is_empty(row[c]) for c in cols_uteis):
+            break
+        dados.append(row)
+
+    return {"meta": meta, "dims": dims, "valores": valores, "dados": dados,
+            "linha_cabecalho": h_row + 1}
