@@ -1,11 +1,31 @@
-%md
-# Ingestão `tarif_new.xlsx` → tabelas Delta (uma tabela por sheet)
+%pip install openpyxl
 
-**Origem:** `/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/tarif_new.xlsx`
-**Destino:** `<catalogo>.<schema>.<prefixo><nome_da_sheet>`
 
-- Procura a linha com `Ramo` (cabeçalho) e `Ciclo`/`Tipo`/`Tarifa` (metadados).
-- Colunas de valor = colunas com cobertura por cima (`RCO-...`, `RCF-...`); a sub-linha (`BV-Valor Base`) é opcional.
-- **long**: uma linha por dimensões × cobertura → `cobertura_cod`, `cobertura`, `metrica`, `valor`.
-- **wide**: igual ao Excel, uma coluna por cobertura.
 
+
+dbutils.library.restartPython()
+
+
+
+dbutils.widgets.text("ficheiro", "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/tarif_new.xlsx", "Ficheiro Excel")
+dbutils.widgets.text("catalogo_destino", "agpt_insurance_dv_catalog", "Catálogo destino")
+dbutils.widgets.text("schema_destino", "wkb_bus_operations_claimsmotor", "Schema destino")
+dbutils.widgets.text("prefixo_tabela", "wrk_polaris_tarif_", "Prefixo das tabelas")
+dbutils.widgets.dropdown("formato", "long", ["long", "wide"], "Formato")
+dbutils.widgets.text("sheets", "", "Sheets (vazio = todas; separadas por vírgula)")
+dbutils.widgets.text("ancora_cabecalho", "Ramo", "Texto da 1ª coluna do cabeçalho")
+dbutils.widgets.text("ancora_metadados", "Ciclo,Tipo,Tarifa", "Etiquetas possíveis da linha de metadados (vírgula)")
+dbutils.widgets.dropdown("dry_run", "sim", ["sim", "nao"], "Só pré-visualizar (não escreve)")
+
+FICHEIRO      = dbutils.widgets.get("ficheiro")
+CATALOGO      = dbutils.widgets.get("catalogo_destino")
+SCHEMA        = dbutils.widgets.get("schema_destino")
+PREFIXO       = dbutils.widgets.get("prefixo_tabela")
+FORMATO       = dbutils.widgets.get("formato")
+SHEETS_FILTRO = [s.strip() for s in dbutils.widgets.get("sheets").split(",") if s.strip()]
+ANCORA_CAB    = dbutils.widgets.get("ancora_cabecalho")
+ANCORA_META   = [s.strip() for s in dbutils.widgets.get("ancora_metadados").split(",") if s.strip()]
+DRY_RUN       = dbutils.widgets.get("dry_run") == "sim"
+
+print(f"Ficheiro : {FICHEIRO}")
+print(f"Destino  : {CATALOGO}.{SCHEMA}.{PREFIXO}<sheet>  | formato={FORMATO} | dry_run={DRY_RUN}")
