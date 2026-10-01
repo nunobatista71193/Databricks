@@ -1,0 +1,343 @@
+# Databricks notebook source
+# MAGIC %md
+# MAGIC # Ingestão `tarif_new.xlsx` → tabelas Delta (uma tabela por sheet)
+# MAGIC
+# MAGIC **Origem:** `/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/tarif_new.xlsx`
+# MAGIC **Destino:** `<catalogo>.<schema>.<prefixo><nome_da_sheet>` (definido nos widgets)
+# MAGIC
+# MAGIC ### Estrutura esperada de cada sheet
+# MAGIC | Linha | Conteúdo |
+# MAGIC |---|---|
+# MAGIC | 1 | Barra de título (ignorada) |
+# MAGIC | 2 | Etiquetas de metadados: `Ciclo`, `Tipo`, `Tarifa` |
+# MAGIC | 3 | Valores dos metadados: `1`, `Prémio`, `Comercial` |
+# MAGIC | 5 | Coberturas (células unidas): `RCO-Responsabilidade Civil Obrigatória`, `RCF-...`, `CCC-...` |
+# MAGIC | 6 | Cabeçalho: `Ramo`, `Produto`, `Canal de Distribuição`, ..., `BV-Valor Base` |
+# MAGIC | 7+ | Dados (até à primeira linha vazia) |
+# MAGIC
+# MAGIC As posições **não estão fixas**: o notebook procura a linha que contém `Ramo` (cabeçalho) e `Ciclo` (metadados),
+# MAGIC por isso funciona mesmo que alguma sheet tenha linhas a mais/menos no topo.
+# MAGIC
+# MAGIC ### Formatos de saída
+# MAGIC - **long** (recomendado): uma linha por combinação dimensões × cobertura × métrica → `cobertura_cod`, `cobertura`, `metrica`, `valor`. Funciona igual para todas as sheets, mesmo com nº de coberturas diferente.
+# MAGIC - **wide**: igual ao Excel, uma coluna por cobertura/métrica (ex.: `rco__bv_valor_base`).
+
+# COMMAND ----------
+
+# MAGIC %pip install openpyxl --quiet
+
+# COMMAND ----------
+
+dbutils.library.restartPython()
+
+# COMMAND ----------
+
+# DBTITLE 1,Parâmetros
+dbutils.widgets.text("ficheiro", "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/tarif_new.xlsx", "Ficheiro Excel")
+dbutils.widgets.text("catalogo_destino", "xxxx", "Catálogo destino")
+dbutils.widgets.text("schema_destino", "xxxx", "Schema destino")
+dbutils.widgets.text("prefixo_tabela", "tarif_", "Prefixo das tabelas")
+dbutils.widgets.dropdown("formato", "long", ["long", "wide"], "Formato")
+dbutils.widgets.text("sheets", "", "Sheets (vazio = todas; separadas por vírgula)")
+dbutils.widgets.text("ancora_cabecalho", "Ramo", "Texto da 1ª coluna do cabeçalho")
+dbutils.widgets.text("ancora_metadados", "Ciclo", "Texto da linha de metadados")
+dbutils.widgets.dropdown("dry_run", "sim", ["sim", "nao"], "Só pré-visualizar (não escreve)")
+
+FICHEIRO         = dbutils.widgets.get("ficheiro")
+CATALOGO         = dbutils.widgets.get("catalogo_destino")
+SCHEMA           = dbutils.widgets.get("schema_destino")
+PREFIXO          = dbutils.widgets.get("prefixo_tabela")
+FORMATO          = dbutils.widgets.get("formato")
+SHEETS_FILTRO    = [s.strip() for s in dbutils.widgets.get("sheets").split(",") if s.strip()]
+ANCORA_CAB       = dbutils.widgets.get("ancora_cabecalho")
+ANCORA_META      = dbutils.widgets.get("ancora_metadados")
+DRY_RUN          = dbutils.widgets.get("dry_run") == "sim"
+
+print(f"Ficheiro : {FICHEIRO}")
+print(f"Destino  : {CATALOGO}.{SCHEMA}.{PREFIXO}<sheet>  | formato={FORMATO} | dry_run={DRY_RUN}")
+
+# COMMAND ----------
+
+# DBTITLE 1,Funções de parsing
+import re
+import unicodedata
+import openpyxl
+
+
+def is_empty(v):
+    return v is None or (isinstance(v, str) and v.strip() == "")
+
+
+def norm(s):
+    """Normaliza texto para nome de coluna/tabela: sem acentos, minúsculas, só [a-z0-9_]."""
+    s = "" if s is None else str(s)
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
+    s = re.sub(r"[^0-9a-zA-Z]+", "_", s).strip("_").lower()
+    if s and s[0].isdigit():
+        s = "c_" + s
+    return s
+
+
+def dedupe(nomes):
+    vistos, out = {}, []
+    for n in nomes:
+        n = n or "col"
+        if n in vistos:
+            vistos[n] += 1
+            out.append(f"{n}_{vistos[n]}")
+        else:
+            vistos[n] = 0
+            out.append(n)
+    return out
+
+
+def to_str(v):
+    """Dimensões como texto; 701.0 -> '701'."""
+    if is_empty(v):
+        return None
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v).strip()
+
+
+def to_double(v):
+    """Valores numéricos; aceita '0,00000000', '1.234,56', '5%'."""
+    if is_empty(v):
+        return None
+    if isinstance(v, bool):
+        return float(v)
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip().replace(" ", "")
+    pct = s.endswith("%")
+    s = s.rstrip("%")
+    if "," in s and "." in s:
+        s = s.replace(".", "").replace(",", ".")
+    else:
+        s = s.replace(",", ".")
+    try:
+        x = float(s)
+        return x / 100 if pct else x
+    except ValueError:
+        return None
+
+
+def sheet_to_grid(ws):
+    """Lê a sheet para lista de listas, propagando o valor das células unidas (merged)."""
+    grid = [list(r) for r in ws.iter_rows(values_only=True)]
+    for rng in ws.merged_cells.ranges:
+        v = ws.cell(rng.min_row, rng.min_col).value
+        for r in range(rng.min_row, rng.max_row + 1):
+            for c in range(rng.min_col, rng.max_col + 1):
+                if r - 1 < len(grid) and c - 1 < len(grid[r - 1]):
+                    grid[r - 1][c - 1] = v
+    return grid
+
+
+def find_cell(grid, texto, max_linhas=50):
+    alvo = norm(texto)
+    for r, row in enumerate(grid[:max_linhas]):
+        for c, v in enumerate(row):
+            if not is_empty(v) and norm(v) == alvo:
+                return r, c
+    return None
+
+
+def split_cobertura(txt):
+    """'RCO-Responsabilidade Civil Obrigatória' -> ('RCO', 'Responsabilidade Civil Obrigatória')."""
+    if is_empty(txt):
+        return None, None
+    txt = str(txt).strip()
+    m = re.match(r"^\s*([A-Za-z0-9_]+)\s*-\s*(.+)$", txt)
+    return (m.group(1), m.group(2).strip()) if m else (txt, txt)
+
+
+def parse_sheet(ws, ancora_cab="Ramo", ancora_meta="Ciclo"):
+    """
+    Devolve dict com:
+      meta       : {'ciclo': '1', 'tipo': 'Prémio', 'tarifa': 'Comercial'}
+      dims       : [(nome_coluna, idx_coluna, header_original)]
+      valores    : [(idx_coluna, cobertura_txt, metrica_txt)]
+      dados      : lista de linhas (listas) da grid
+    """
+    grid = sheet_to_grid(ws)
+    if not grid:
+        raise ValueError("Sheet vazia")
+    ncols = max(len(r) for r in grid)
+    grid = [r + [None] * (ncols - len(r)) for r in grid]
+
+    # --- cabeçalho
+    pos = find_cell(grid, ancora_cab)
+    if pos is None:
+        raise ValueError(f"Não encontrei a célula '{ancora_cab}' (cabeçalho)")
+    h_row, h_col = pos
+    header = grid[h_row]
+    cov_row = grid[h_row - 1] if h_row > 0 else [None] * ncols
+
+    # --- metadados (linha com 'Ciclo' e valores na linha abaixo)
+    meta = {}
+    mpos = find_cell(grid[:h_row], ancora_meta)
+    if mpos is not None and mpos[0] + 1 < h_row:
+        mr = mpos[0]
+        for c, lab in enumerate(grid[mr]):
+            if not is_empty(lab):
+                meta[norm(lab)] = to_str(grid[mr + 1][c])
+
+    # --- separar dimensões vs colunas de valor
+    def tem_cobertura(c):
+        v = cov_row[c]
+        return not is_empty(v) and v != header[c]   # ignora merges verticais do próprio cabeçalho
+
+    first_val = next((c for c in range(h_col, ncols) if tem_cobertura(c) and not is_empty(header[c])), None)
+    fim_dims = first_val if first_val is not None else ncols
+
+    dims_idx = [c for c in range(h_col, fim_dims) if not is_empty(header[c])]
+    dims = list(zip(dedupe([norm(header[c]) for c in dims_idx]), dims_idx, [header[c] for c in dims_idx]))
+
+    valores = []
+    if first_val is not None:
+        cob_atual = None
+        for c in range(first_val, ncols):
+            if tem_cobertura(c):
+                cob_atual = cov_row[c]           # forward-fill horizontal
+            if not is_empty(header[c]):
+                valores.append((c, cob_atual, str(header[c]).strip()))
+
+    # --- dados: até à primeira linha totalmente vazia
+    cols_uteis = [c for _, c, _ in dims] + [c for c, _, _ in valores]
+    dados = []
+    for r in range(h_row + 1, len(grid)):
+        row = grid[r]
+        if all(is_empty(row[c]) for c in cols_uteis):
+            break
+        dados.append(row)
+
+    return {"meta": meta, "dims": dims, "valores": valores, "dados": dados,
+            "linha_cabecalho": h_row + 1}
+
+# COMMAND ----------
+
+# DBTITLE 1,Construção dos DataFrames Spark
+from pyspark.sql import functions as F, types as T
+
+
+def build_long(p, sheet_name):
+    meta_keys = list(p["meta"].keys())
+    dim_names = [n for n, _, _ in p["dims"]]
+
+    schema = T.StructType(
+        [T.StructField(k, T.StringType()) for k in meta_keys]
+        + [T.StructField(n, T.StringType()) for n in dim_names]
+        + [T.StructField("cobertura_cod", T.StringType()),
+           T.StructField("cobertura", T.StringType()),
+           T.StructField("metrica", T.StringType()),
+           T.StructField("valor", T.DoubleType()),
+           T.StructField("valor_original", T.StringType())]
+    )
+    meta_vals = [p["meta"][k] for k in meta_keys]
+    rows = []
+    for row in p["dados"]:
+        dvals = [to_str(row[c]) for _, c, _ in p["dims"]]
+        for c, cob, met in p["valores"]:
+            cod, desc = split_cobertura(cob)
+            raw = row[c]
+            rows.append(tuple(meta_vals + dvals + [cod, desc, met, to_double(raw), to_str(raw)]))
+    return spark.createDataFrame(rows, schema)
+
+
+def build_wide(p, sheet_name):
+    meta_keys = list(p["meta"].keys())
+    dim_names = [n for n, _, _ in p["dims"]]
+    val_names = []
+    for c, cob, met in p["valores"]:
+        cod, _ = split_cobertura(cob)
+        val_names.append(f"{norm(cod)}__{norm(met)}" if cod else norm(met))
+    todos = dedupe(meta_keys + dim_names + val_names)
+    meta_n, dim_n, val_n = (todos[:len(meta_keys)],
+                            todos[len(meta_keys):len(meta_keys) + len(dim_names)],
+                            todos[len(meta_keys) + len(dim_names):])
+
+    schema = T.StructType(
+        [T.StructField(k, T.StringType()) for k in meta_n]
+        + [T.StructField(n, T.StringType()) for n in dim_n]
+        + [T.StructField(n, T.DoubleType()) for n in val_n]
+    )
+    meta_vals = [p["meta"][k] for k in meta_keys]
+    rows = [tuple(meta_vals
+                  + [to_str(row[c]) for _, c, _ in p["dims"]]
+                  + [to_double(row[c]) for c, _, _ in p["valores"]])
+            for row in p["dados"]]
+    df = spark.createDataFrame(rows, schema)
+
+    # guarda o nome original da cobertura como comentário de coluna (útil no Catalog Explorer)
+    comentarios = {n: f"{cob} | {met}" for n, (_, cob, met) in zip(val_n, p["valores"])}
+    return df, comentarios
+
+
+def add_auditoria(df, sheet_name):
+    return (df
+            .withColumn("sheet_origem", F.lit(sheet_name))
+            .withColumn("ficheiro_origem", F.lit(FICHEIRO))
+            .withColumn("dt_carga", F.current_timestamp()))
+
+# COMMAND ----------
+
+# DBTITLE 1,Processar todas as sheets
+wb = openpyxl.load_workbook(FICHEIRO, data_only=True)   # data_only=True -> lê valores calculados, não fórmulas
+sheets = SHEETS_FILTRO or wb.sheetnames
+print(f"{len(wb.sheetnames)} sheets no ficheiro; a processar {len(sheets)}")
+
+if not DRY_RUN:
+    spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{CATALOGO}`.`{SCHEMA}`")
+
+resultado, erros = [], []
+
+for sh in sheets:
+    tabela = f"`{CATALOGO}`.`{SCHEMA}`.`{PREFIXO}{norm(sh)}`"
+    try:
+        ws = wb[sh]
+        if ws.sheet_state != "visible" and not SHEETS_FILTRO:
+            print(f"⏭  {sh}: sheet oculta, ignorada")
+            continue
+
+        p = parse_sheet(ws, ANCORA_CAB, ANCORA_META)
+        if not p["dados"]:
+            raise ValueError("Sem linhas de dados abaixo do cabeçalho")
+
+        comentarios = {}
+        if FORMATO == "long" and p["valores"]:
+            df = build_long(p, sh)
+        else:
+            df, comentarios = build_wide(p, sh)
+        df = add_auditoria(df, sh)
+
+        n = df.count()
+        n_nulos = df.filter(F.col("valor").isNull()).count() if "valor" in df.columns else None
+        print(f"✔ {sh} -> {tabela} | meta={p['meta']} | dims={[d[0] for d in p['dims']]} "
+              f"| colunas_valor={len(p['valores'])} | linhas_excel={len(p['dados'])} | linhas_tabela={n}"
+              + (f" | valores_nulos={n_nulos}" if n_nulos else ""))
+
+        if DRY_RUN:
+            display(df.limit(20))
+        else:
+            (df.write.format("delta")
+               .mode("overwrite")
+               .option("overwriteSchema", "true")
+               .saveAsTable(tabela))
+            spark.sql(f"COMMENT ON TABLE {tabela} IS 'Origem: {FICHEIRO.replace(chr(39), '')} | sheet: {sh.replace(chr(39), '')}'")
+            for col, txt in comentarios.items():
+                spark.sql(f"ALTER TABLE {tabela} ALTER COLUMN `{col}` COMMENT '{str(txt).replace(chr(39), '')}'")
+
+        resultado.append((sh, tabela, n, "OK" if not DRY_RUN else "DRY_RUN"))
+    except Exception as e:
+        print(f"✘ {sh}: {e}")
+        erros.append((sh, tabela, 0, f"ERRO: {e}"))
+
+# COMMAND ----------
+
+# DBTITLE 1,Resumo
+resumo = spark.createDataFrame(resultado + erros, "sheet string, tabela string, linhas long, estado string")
+display(resumo)
+
+if erros:
+    raise Exception(f"{len(erros)} sheet(s) com erro: {[e[0] for e in erros]}")
