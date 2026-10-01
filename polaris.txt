@@ -1,49 +1,5 @@
-wb = openpyxl.load_workbook(FICHEIRO, data_only=True)   # lê valores calculados, não fórmulas
-sheets = SHEETS_FILTRO or wb.sheetnames
-print(f"{len(wb.sheetnames)} sheets no ficheiro; a processar {len(sheets)}")
+resumo = spark.createDataFrame(resultado + erros, "sheet string, tabela string, linhas long, estado string")
+display(resumo)
 
-if not DRY_RUN:
-    spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{CATALOGO}`.`{SCHEMA}`")
-
-resultado, erros = [], []
-
-for sh in sheets:
-    tabela = f"`{CATALOGO}`.`{SCHEMA}`.`{PREFIXO}{norm(sh)}`"
-    try:
-        ws = wb[sh]
-        if ws.sheet_state != "visible" and not SHEETS_FILTRO:
-            print(f"⏭  {sh}: sheet oculta, ignorada")
-            continue
-
-        p = parse_sheet(ws, ANCORA_CAB, ANCORA_META)
-        if not p["dados"]:
-            raise ValueError("Sem linhas de dados abaixo do cabeçalho")
-
-        comentarios = {}
-        if FORMATO == "long" and p["valores"]:
-            df = build_long(p, sh)
-        else:
-            df, comentarios = build_wide(p, sh)
-        df = add_auditoria(df, sh)
-
-        n = df.count()
-        n_nulos = df.filter(F.col("valor").isNull()).count() if "valor" in df.columns else None
-        print(f"✔ {sh} -> {tabela} | meta={p['meta']} | dims={[d[0] for d in p['dims']]} "
-              f"| colunas_valor={len(p['valores'])} | linhas_excel={len(p['dados'])} | linhas_tabela={n}"
-              + (f" | valores_nulos={n_nulos}" if n_nulos else ""))
-
-        if DRY_RUN:
-            display(df.limit(20))
-        else:
-            (df.write.format("delta")
-               .mode("overwrite")
-               .option("overwriteSchema", "true")
-               .saveAsTable(tabela))
-            spark.sql(f"COMMENT ON TABLE {tabela} IS 'Origem: {FICHEIRO.replace(chr(39), '')} | sheet: {sh.replace(chr(39), '')}'")
-            for col, txt in comentarios.items():
-                spark.sql(f"ALTER TABLE {tabela} ALTER COLUMN `{col}` COMMENT '{str(txt).replace(chr(39), '')}'")
-
-        resultado.append((sh, tabela, n, "OK" if not DRY_RUN else "DRY_RUN"))
-    except Exception as e:
-        print(f"✘ {sh}: {e}")
-        erros.append((sh, tabela, 0, f"ERRO: {e}"))
+if erros:
+    raise Exception(f"{len(erros)} sheet(s) com erro: {[e[0] for e in erros]}")
