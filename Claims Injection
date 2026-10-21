@@ -1,0 +1,452 @@
+# ============================================================
+# CONFIGURAÇÃO
+# ============================================================
+
+import re
+import os
+import pandas as pd
+
+from pyspark.sql.functions import (
+    current_timestamp,
+    lit,
+    col
+)
+
+from pyspark.sql.types import StringType
+
+catalog_name = "agpt_insurance_dv_catalog"
+schema_name = "wkb_bus_operations_claimsmotor"
+table_name = "raw_claims"
+
+full_table_name = f"{catalog_name}.{schema_name}.{table_name}"
+
+source_folder = "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/claims/"
+
+print(f"Tabela destino: {full_table_name}")
+print(f"Pasta origem: {source_folder}")
+
+
+# ============================================================
+# FUNÇÕES AUXILIARES
+# ============================================================
+
+def to_local_path(path: str) -> str:
+
+    if path.startswith("dbfs:"):
+        return path[len("dbfs:"):]
+
+    return path
+
+
+def sanitize_column_name(name: str):
+
+    novo_nome = str(name).strip()
+
+    novo_nome = re.sub(
+        r"[ ,;{}()\n\t=]",
+        "_",
+        novo_nome
+    )
+
+    substituicoes = {
+        "º": "o",
+        "ª": "a",
+        "%": "pct",
+        "/": "_",
+        "\\": "_",
+        "#": "num",
+        "€": "eur",
+        "$": "usd"
+    }
+
+    for original, substituto in substituicoes.items():
+        novo_nome = novo_nome.replace(
+            original,
+            substituto
+        )
+
+    novo_nome = re.sub(r"_+", "_", novo_nome)
+    novo_nome = novo_nome.strip("_")
+
+    if not novo_nome:
+        novo_nome = "coluna_sem_nome"
+
+    return novo_nome
+
+
+def sanitize_dataframe_columns(df):
+
+    nomes_originais = df.columns
+    nomes_novos = []
+    contador = {}
+
+    for nome in nomes_originais:
+
+        novo_nome = sanitize_column_name(nome)
+
+        if novo_nome in contador:
+            contador[novo_nome] += 1
+            novo_nome = f"{novo_nome}_{contador[novo_nome]}"
+        else:
+            contador[novo_nome] = 0
+
+        nomes_novos.append(novo_nome)
+
+    for antigo, novo in zip(
+        nomes_originais,
+        nomes_novos
+    ):
+
+        if antigo != novo:
+            df = df.withColumnRenamed(
+                antigo,
+                novo
+            )
+
+    return df
+
+
+def cast_all_columns_to_string(df):
+
+    for coluna in df.columns:
+
+        df = df.withColumn(
+            coluna,
+            col(coluna).cast(StringType())
+        )
+
+    return df
+
+
+def read_excel_robust(volume_path, file_name):
+
+    local_path = to_local_path(volume_path)
+
+    if not os.path.exists(local_path):
+        raise Exception(
+            f"Ficheiro não encontrado: {local_path}"
+        )
+
+    match = re.search(
+        r"(\d{4})",
+        file_name
+    )
+
+    if not match:
+        raise Exception(
+            f"Não foi possível identificar o ano em {file_name}"
+        )
+
+    ano = match.group(1)
+
+    sheet_name = f"CLAIMS_{ano}"
+
+    print(f"A ler sheet: {sheet_name}")
+
+    excel = pd.ExcelFile(local_path)
+
+    print(f"Sheets disponíveis: {excel.sheet_names}")
+
+    if sheet_name not in excel.sheet_names:
+
+        raise Exception(
+            f"Sheet {sheet_name} não encontrada. "
+            f"Sheets disponíveis: {excel.sheet_names}"
+        )
+
+    pdf = pd.read_excel(
+        local_path,
+        sheet_name=sheet_name,
+        dtype=str
+    )
+
+    pdf = pdf.fillna("")
+
+    pdf = pdf.dropna(
+        axis=0,
+        how="all"
+    )
+
+    pdf = pdf.dropna(
+        axis=1,
+        how="all"
+    )
+
+    print(f"Linhas lidas: {len(pdf):,}")
+    print(f"Colunas lidas: {len(pdf.columns)}")
+
+    if len(pdf) == 0:
+        raise Exception(
+            f"Sem registos na sheet {sheet_name}"
+        )
+
+    pdf.columns = [
+        str(c).strip()
+        for c in pdf.columns
+    ]
+
+    return spark.createDataFrame(
+        pdf.astype(str)
+    ), ano
+
+
+# ============================================================
+# VALIDAR CATÁLOGO
+# ============================================================
+
+catalog_exists = (
+    spark.sql("SHOW CATALOGS")
+    .filter(f"catalog = '{catalog_name}'")
+    .count()
+)
+
+if catalog_exists == 0:
+
+    raise Exception(
+        f"Catálogo não encontrado: {catalog_name}"
+    )
+
+print(f"OK - Catálogo encontrado: {catalog_name}")
+
+
+# ============================================================
+# VALIDAR SCHEMA
+# ============================================================
+
+schema_exists = (
+    spark.sql(
+        f"SHOW SCHEMAS IN {catalog_name}"
+    )
+    .filter(
+        f"databaseName = '{schema_name}'"
+    )
+    .count()
+)
+
+if schema_exists == 0:
+
+    raise Exception(
+        f"Schema não encontrado: {schema_name}"
+    )
+
+print(f"OK - Schema encontrado: {schema_name}")
+
+
+# ============================================================
+# LISTAR FICHEIROS
+# ============================================================
+
+all_files = dbutils.fs.ls(source_folder)
+
+files = [
+    f.path
+    for f in all_files
+    if re.match(
+        r"WORK_CLAIMS_\d{4}\.xlsx$",
+        f.name,
+        re.IGNORECASE
+    )
+]
+
+print(f"Encontrados {len(files)} ficheiros.")
+
+for ficheiro in sorted(files):
+
+    print(
+        f" - {ficheiro.split('/')[-1]}"
+    )
+
+if len(files) == 0:
+
+    raise Exception(
+        f"Nenhum ficheiro encontrado em {source_folder}"
+    )
+
+
+# ============================================================
+# LIMPAR TABELA DESTINO
+# ============================================================
+
+spark.sql(
+    f"DROP TABLE IF EXISTS {full_table_name}"
+)
+
+print(f"Tabela {full_table_name} removida.")
+
+
+# ============================================================
+# PROCESSAMENTO
+# ============================================================
+
+first_load = True
+total_rows_loaded = 0
+successful_files = 0
+failed_files = []
+
+for file_path in sorted(files):
+
+    file_name = file_path.split("/")[-1]
+
+    print("")
+    print("=" * 80)
+    print(f"Processando {file_name}")
+    print("=" * 80)
+
+    try:
+
+        df, ano = read_excel_robust(
+            file_path,
+            file_name
+        )
+
+        df = sanitize_dataframe_columns(df)
+
+        df = cast_all_columns_to_string(df)
+
+        row_count = df.count()
+
+        print(f"Registos encontrados: {row_count:,}")
+
+        if row_count == 0:
+
+            print("Sem registos.")
+            continue
+
+        df = (
+            df
+            .withColumn(
+                "source_file",
+                lit(file_name)
+            )
+            .withColumn(
+                "claim_year",
+                lit(ano)
+            )
+            .withColumn(
+                "file_type",
+                lit("CLAIMS")
+            )
+            .withColumn(
+                "load_timestamp",
+                current_timestamp()
+            )
+        )
+
+        if first_load:
+
+            (
+                df.write
+                .format("delta")
+                .mode("overwrite")
+                .option(
+                    "overwriteSchema",
+                    "true"
+                )
+                .saveAsTable(
+                    full_table_name
+                )
+            )
+
+            first_load = False
+
+            print("Tabela criada.")
+
+        else:
+
+            (
+                df.write
+                .format("delta")
+                .mode("append")
+                .option(
+                    "mergeSchema",
+                    "true"
+                )
+                .saveAsTable(
+                    full_table_name
+                )
+            )
+
+            print("Append efetuado.")
+
+        total_rows_loaded += row_count
+        successful_files += 1
+
+    except Exception as e:
+
+        import traceback
+
+        print("")
+        print("ERRO NO FICHEIRO")
+        print(file_name)
+        print("")
+
+        traceback.print_exc()
+
+        failed_files.append(
+            (
+                file_name,
+                str(e)
+            )
+        )
+
+
+# ============================================================
+# VALIDAÇÃO FINAL
+# ============================================================
+
+print("")
+print("=" * 80)
+print("VALIDAÇÃO FINAL")
+print("=" * 80)
+
+print(
+    f"Ficheiros processados com sucesso: {successful_files}"
+)
+
+print(
+    f"Ficheiros com erro: {len(failed_files)}"
+)
+
+if failed_files:
+
+    print("")
+    print("DETALHE DOS ERROS")
+    print("-" * 80)
+
+    for ficheiro, erro in failed_files:
+
+        print(f"Ficheiro: {ficheiro}")
+        print(f"Erro: {erro}")
+        print("")
+
+
+if successful_files == 0:
+
+    raise Exception(
+        "Nenhum ficheiro foi carregado com sucesso."
+    )
+
+
+df_final = spark.table(
+    full_table_name
+)
+
+print(
+    f"Total carregado: {total_rows_loaded:,}"
+)
+
+print(
+    f"Total na tabela: {df_final.count():,}"
+)
+
+display(
+    df_final
+    .groupBy(
+        "claim_year",
+        "source_file"
+    )
+    .count()
+)
+
+print("")
+print("Carga concluída com sucesso.")
