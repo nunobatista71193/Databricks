@@ -54,6 +54,7 @@ def sanitize_column_name(name: str) -> str:
         "#": "num",
         "€": "eur",
         "$": "usd",
+        "`": "",
     }
     for original, substituto in substituicoes.items():
         novo_nome = novo_nome.replace(original, substituto)
@@ -68,7 +69,12 @@ def sanitize_column_name(name: str) -> str:
 
 
 def sanitize_dataframe_columns(spark_df):
-    """Aplica sanitize_column_name e evita nomes duplicados."""
+    """Aplica sanitize_column_name e evita nomes duplicados
+    (case-insensitive, como o Delta).
+
+    Usa toDF (renomeia por posição), que não tem problemas com
+    pontos nos nomes das colunas, ao contrário de withColumnRenamed.
+    """
 
     nomes_originais = spark_df.columns
     nomes_novos = []
@@ -76,27 +82,33 @@ def sanitize_dataframe_columns(spark_df):
 
     for nome in nomes_originais:
         nome_limpo = sanitize_column_name(nome)
+        chave = nome_limpo.lower()
 
-        if nome_limpo in contagem:
-            contagem[nome_limpo] += 1
-            nome_limpo = f"{nome_limpo}_{contagem[nome_limpo]}"
+        if chave in contagem:
+            contagem[chave] += 1
+            nome_limpo = f"{nome_limpo}_{contagem[chave]}"
+            # garante que o novo nome também não colide
+            while nome_limpo.lower() in contagem:
+                contagem[chave] += 1
+                nome_limpo = f"{sanitize_column_name(nome)}_{contagem[chave]}"
+            contagem[nome_limpo.lower()] = 0
         else:
-            contagem[nome_limpo] = 0
+            contagem[chave] = 0
 
         nomes_novos.append(nome_limpo)
 
-    for nome_original, nome_novo in zip(nomes_originais, nomes_novos):
-        if nome_original != nome_novo:
-            spark_df = spark_df.withColumnRenamed(nome_original, nome_novo)
-
-    return spark_df
+    return spark_df.toDF(*nomes_novos)
 
 
 def cast_all_columns_to_string(spark_df):
-    """Garante schema raw estável: todas as colunas de negócio em STRING."""
-    for c in spark_df.columns:
-        spark_df = spark_df.withColumn(c, col(c).cast(StringType()))
-    return spark_df
+    """Garante schema raw estável: todas as colunas de negócio em STRING.
+
+    Um único select com backticks: aguenta pontos/hífenes nos nomes
+    e gera um plano muito mais leve que centenas de withColumn.
+    """
+    return spark_df.select(
+        *[col(f"`{c}`").cast(StringType()).alias(c) for c in spark_df.columns]
+    )
 
 
 def detect_delimiter_and_encoding(local_path: str):
@@ -188,7 +200,7 @@ def read_csv_robust(volume_path: str, file_name: str):
         print(f"Spark CSV OK (sep={delimiter!r}, encoding={encoding})")
         return df
     except Exception as e:
-        print(f"Spark CSV falhou: {e}")
+        print(f"Spark CSV falhou: {str(e)[:500]}")
 
     pdf = read_csv_pandas(local_path, delimiter)
 
@@ -332,9 +344,9 @@ for file_path in sorted(files):
     except Exception as e:
         print("")
         print(f"ERRO NO FICHEIRO: {file_name}")
-        print(str(e))
+        print(str(e)[:1500])   # corta o erro para não rebentar o output
         print("")
-        failed_files.append((file_name, str(e)))
+        failed_files.append((file_name, str(e)[:1500]))
 
 # ============================================================
 # VALIDAÇÃO FINAL
@@ -361,7 +373,7 @@ if failed_files:
     print("")
     print("Detalhe dos erros:")
     for name, err in failed_files:
-        print(f"  - {name}: {err}")
+        print(f"  - {name}: {err[:300]}")
 
 display(
     df_final.groupBy("periodo", "marca", "source_file").count()
