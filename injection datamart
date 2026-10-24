@@ -1,125 +1,209 @@
-from pyspark.sql.functions import col, expr
-from datetime import datetime
+# ============================================================
+# RAW -> CORE: inferir tipos e gravar core_datamart
+# ============================================================
+
+import pyspark.sql.functions as F
 
 catalog_name = "agpt_insurance_dv_catalog"
 schema_name = "wkb_bus_operations_claimsmotor"
-table_name = "core_datamart"
-source_table = f"{catalog_name}.{schema_name}.raw_datamart"
 
-ingestion_columns = ["source_file", "período", "marca", "load_timestamp"]
+raw_table = f"{catalog_name}.{schema_name}.raw_datamart"
+core_table = f"{catalog_name}.{schema_name}.core_datamart"
 
-# 1. Amostra de 1000 linhas onde Id_Policy está preenchido
-print("A carregar amostra de 1000 linhas...")
-sample_df = (
-    spark.table(source_table)
-    .filter(col("AC_Policy").isNotNull() & (col("AC_Policy") != ""))
-    .limit(1000)
-)
+KEY_COLUMN = "No_Apólice"                                   # chave única
+INGESTION_COLS = ["source_file", "marca", "load_timestamp"]  # não vão para o core
+SAMPLE_ROWS = 200_000        # amostra para inferir tipos (espalhada por todos os ficheiros)
+DEDUP_ON_KEY = False         # True = mantém só 1 linha por chave (a de periodo mais recente)
 
-sample_rows = [row.asDict() for row in sample_df.collect()]
-print(f"Amostra carregada: {len(sample_rows)} linhas")
+# Overrides manuais (opcional). Ex.: {"CDPOSTAL124": "string", "Val_Extras": "decimal(18,2)"}
+FORCE_TYPES = {}
 
-def is_date(value):
-    if value is None or not isinstance(value, str):
-        return False
-    value = str(value).strip()
-    if len(value) < 8:
-        return False
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y", "%Y%m%d"):
-        try:
-            datetime.strptime(value[:10], fmt)
-            return True
-        except:
-            continue
-    return False
+print(f"Origem:  {raw_table}")
+print(f"Destino: {core_table}")
 
-def is_numeric(value):
-    if value is None:
-        return False
-    if isinstance(value, (int, float)):
-        return True
-    if isinstance(value, str):
-        try:
-            float(str(value).strip().replace(",", "."))
-            return True
-        except:
-            return False
-    return False
+# ------------------------------------------------------------
+# Leitura e remoção das colunas de ingestão
+# ------------------------------------------------------------
 
-def has_decimal(value):
-    if value is None:
-        return False
-    s = str(value)
-    return "." in s or "," in s
+raw = spark.table(raw_table)
 
-def infer_type(col_name, rows):
-    # Força decimal(18,2) em todas as colunas que começam por Amt_
-    if col_name.startswith("Amt_"):
-        return "decimal(18,2)"
+drop_cols = [c for c in INGESTION_COLS if c in raw.columns]
+raw = raw.drop(*drop_cols)
+print(f"Colunas de ingestão removidas: {drop_cols}")
 
-    values = [r.get(col_name) for r in rows if r.get(col_name) is not None]
-    if not values:
-        return "string"
+# Resolve o nome real da chave (ignora maiúsculas/minúsculas) e falha cedo com mensagem útil
+cols_lower = {c.lower(): c for c in raw.columns}
+if KEY_COLUMN.lower() not in cols_lower:
+    raise Exception(
+        f"Coluna chave '{KEY_COLUMN}' não existe em {raw_table}. "
+        f"Colunas disponíveis: {raw.columns}"
+    )
+key_col = cols_lower[KEY_COLUMN.lower()]
+print(f"Coluna chave: {key_col}")
 
-    total = len(values)
-    date_count = sum(1 for v in values if is_date(v))
-    numeric_count = sum(1 for v in values if is_numeric(v))
-    decimal_count = sum(1 for v in values if is_numeric(v) and has_decimal(v))
+columns = raw.columns
 
-    # Data
-    if total > 0 and date_count / total > 0.85:
-        return "date"
+# ------------------------------------------------------------
+# Amostra
+# ------------------------------------------------------------
 
-    # Numérico
-    if total > 0 and numeric_count / total > 0.95:
-        if numeric_count > 0 and decimal_count / numeric_count > 0.05:
-            return "decimal(18,2)"
-        else:
-            max_abs = 0
-            for v in values:
-                try:
-                    n = abs(float(str(v).replace(",", ".")))
-                    if n > max_abs:
-                        max_abs = n
-                except:
-                    pass
-            if max_abs < 2_147_483_647:
-                return "int"
-            else:
-                return "bigint"
+total_raw = raw.count()
+print(f"Registos na raw: {total_raw:,}")
 
-    # Boolean
-    bool_set = {"true", "false", "1", "0", "s", "n", "sim", "nao", "yes", "no"}
-    bool_count = sum(1 for v in values if str(v).lower().strip() in bool_set)
-    if total > 0 and bool_count / total > 0.95:
-        return "boolean"
+fraction = min(1.0, SAMPLE_ROWS / max(total_raw, 1))
+sample = raw if fraction >= 1.0 else raw.sample(withReplacement=False, fraction=fraction, seed=42)
+print(f"A carregar amostra (~{SAMPLE_ROWS:,} linhas, fração={fraction:.4f})...")
 
-    return "string"
+# ------------------------------------------------------------
+# Inferência de tipos (uma única passagem à amostra)
+# ------------------------------------------------------------
 
-# 2. Infere tipos
 print("A inferir tipos...")
-type_map = {}
-for col_name in sample_df.columns:
-    type_map[col_name] = infer_type(col_name, sample_rows)
 
-# 3. Aplica try_cast
-df = spark.table(source_table)
+RE_INT = r"^-?(0|[1-9][0-9]*)$"                       # sem zeros à esquerda (códigos postais ficam string)
+RE_DEC = r"^-?(0|[1-9][0-9]*)([.,][0-9]+)?$"
+RE_DATE = r"^([0-9]{4}-[0-9]{2}-[0-9]{2}([ T].*)?|[0-9]{2}/[0-9]{2}/[0-9]{4})$"
 
-for col_name, spark_type in type_map.items():
-    if col_name in df.columns and spark_type != "string":
-        df = df.withColumn(col_name, expr(f"try_cast(`{col_name}` as {spark_type})"))
+aggs = []
+for i, c in enumerate(columns):
+    v = F.trim(F.col(f"`{c}`"))
+    has_value = v.isNotNull() & (v != "")
+    aggs += [
+        F.sum(F.when(has_value, 1).otherwise(0)).alias(f"nn_{i}"),
+        F.sum(F.when(v.rlike(RE_INT), 1).otherwise(0)).alias(f"int_{i}"),
+        F.sum(F.when(v.rlike(RE_DEC), 1).otherwise(0)).alias(f"dec_{i}"),
+        F.sum(F.when(v.rlike(RE_DATE), 1).otherwise(0)).alias(f"dt_{i}"),
+        F.max(F.when(v.rlike(RE_INT), F.length(v))).alias(f"len_{i}"),
+    ]
 
-# 4. Remove colunas de ingestão
-cols_to_drop = [c for c in ingestion_columns if c in df.columns]
-if cols_to_drop:
-    df = df.drop(*cols_to_drop)
-    print(f"Colunas de ingestão removidas: {cols_to_drop}")
+stats = sample.agg(*aggs).collect()[0].asDict()
 
-# 5. Escreve a tabela
-df.write \
-  .format("delta") \
-  .mode("overwrite") \
-  .option("overwriteSchema", "true") \
-  .saveAsTable(f"{catalog_name}.{schema_name}.{table_name}")
+col_types = {}
+for i, c in enumerate(columns):
+    nn, n_int, n_dec, n_dt = stats[f"nn_{i}"] or 0, stats[f"int_{i}"] or 0, stats[f"dec_{i}"] or 0, stats[f"dt_{i}"] or 0
+    max_len = stats[f"len_{i}"] or 0
 
-print(f"Tabela criada com sucesso. Total de colunas: {len(df.columns)}")
+    if nn == 0:
+        t = "string"
+    elif n_int == nn:
+        t = "int" if max_len <= 9 else "bigint"
+    elif n_dec == nn:
+        t = "decimal(18,2)"
+    elif n_dt == nn:
+        t = "date"
+    else:
+        t = "string"
+
+    col_types[c] = t
+
+col_types.update({k: v for k, v in FORCE_TYPES.items() if k in col_types})
+
+print("Tipos inferidos:", {t: list(col_types.values()).count(t) for t in set(col_types.values())})
+
+# ------------------------------------------------------------
+# Conversão (try_cast: valores inválidos ficam NULL em vez de rebentar)
+# ------------------------------------------------------------
+
+def cast_expr(c: str, t: str):
+    q = f"`{c}`"
+    if t == "string":
+        return F.col(q)
+    if t in ("int", "bigint"):
+        return F.expr(f"try_cast(trim({q}) as {t})")
+    if t.startswith("decimal"):
+        return F.expr(f"try_cast(replace(trim({q}), ',', '.') as {t})")
+    if t == "date":
+        return F.expr(
+            f"coalesce(try_to_date(substring(trim({q}), 1, 10), 'yyyy-MM-dd'), "
+            f"try_to_date(trim({q}), 'dd/MM/yyyy'))"
+        )
+    return F.expr(f"try_cast({q} as {t})")
+
+
+typed = raw.select(*[cast_expr(c, col_types[c]).alias(c) for c in columns])
+
+# ------------------------------------------------------------
+# Chave única
+# ------------------------------------------------------------
+
+if DEDUP_ON_KEY:
+    from pyspark.sql.window import Window
+    order_col = "periodo" if "periodo" in typed.columns else key_col
+    w = Window.partitionBy(F.col(f"`{key_col}`")).orderBy(F.col(f"`{order_col}`").desc_nulls_last())
+    typed = (
+        typed.withColumn("_rn", F.row_number().over(w))
+        .filter("_rn = 1")
+        .drop("_rn")
+    )
+    print(f"Deduplicação ativa: 1 linha por {key_col}")
+
+# ------------------------------------------------------------
+# Gravar
+# ------------------------------------------------------------
+
+print(f"A gravar {core_table}...")
+(
+    typed.write
+    .format("delta")
+    .mode("overwrite")
+    .option("overwriteSchema", "true")
+    .saveAsTable(core_table)
+)
+print("Tabela gravada.")
+
+# ------------------------------------------------------------
+# Validações
+# ------------------------------------------------------------
+
+core = spark.table(core_table)
+total_core = core.count()
+print("")
+print("=" * 60)
+print("VALIDAÇÃO")
+print("=" * 60)
+print(f"Registos raw:  {total_raw:,}")
+print(f"Registos core: {total_core:,}")
+
+# 1) Perda de valores na conversão (valores que não cabem no tipo inferido)
+raw_counts = raw.agg(*[
+    F.sum(F.when(F.trim(F.col(f"`{c}`")) != "", 1).otherwise(0)).alias(c) for c in columns
+]).collect()[0].asDict()
+
+core_counts = core.agg(*[F.count(F.col(f"`{c}`")).alias(c) for c in columns]).collect()[0].asDict()
+
+perdas = [
+    (c, col_types[c], raw_counts[c] or 0, core_counts[c] or 0)
+    for c in columns
+    if (core_counts[c] or 0) < (raw_counts[c] or 0)
+]
+
+if perdas:
+    print("")
+    print(f"ATENÇÃO: {len(perdas)} coluna(s) perderam valores na conversão de tipo:")
+    for c, t, r, k in perdas:
+        print(f"  - {c} ({t}): {r:,} valores na raw -> {k:,} no core (perdidos: {r - k:,})")
+    print("Corrige com FORCE_TYPES (ex.: {'coluna': 'string'}) e volta a correr.")
+else:
+    print("OK - nenhuma coluna perdeu valores na conversão.")
+
+# 2) Unicidade da chave
+kq = f"`{key_col}`"
+n_distinct = core.select(F.countDistinct(F.col(kq))).collect()[0][0]
+n_null_key = core.filter(F.col(kq).isNull()).count()
+print("")
+print(f"Chave {key_col}: {n_distinct:,} distintas em {total_core:,} linhas, {n_null_key:,} nulas")
+
+if n_distinct + (1 if n_null_key else 0) < total_core:
+    print(f"ATENÇÃO: {key_col} NÃO é única na tabela.")
+    display(
+        core.groupBy(F.col(kq)).count().filter("count > 1").orderBy(F.desc("count")).limit(20)
+    )
+    print("Se a mesma apólice aparece em vários períodos, é esperado. "
+          "Se queres 1 linha por apólice, põe DEDUP_ON_KEY = True.")
+else:
+    print(f"OK - {key_col} é única.")
+
+# 3) Schema final
+core.printSchema()
+print("")
+print("Concluído.")
