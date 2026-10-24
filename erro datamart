@@ -1,505 +1,214 @@
-Tabela destino: agpt_insurance_dv_catalog.wkb_bus_operations_claimsmotor.raw_datamart
-Pasta origem: /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/
-OK - Catálogo encontrado: agpt_insurance_dv_catalog
-OK - Schema encontrado: wkb_bus_operations_claimsmotor
-Encontrados 124 ficheiros CSV.
-  - DATAMART_2301_AGS.csv
-  - DATAMART_2301_OCS.csv
-  - DATAMART_2301_SD.csv
-  - DATAMART_2302_AGS.csv
-  - DATAMART_2302_OCS.csv
-  - DATAMART_2302_SD.csv
-  - DATAMART_2303_AGS.csv
-  - DATAMART_2303_OCS.csv
-  - DATAMART_2303_SD.csv
-  - DATAMART_2304_AGS.csv
-  - DATAMART_2304_OCS.csv
-  - DATAMART_2304_SD.csv
-  - DATAMART_2305_AGS.csv
-  - DATAMART_2305_OCS.csv
-  - DATAMART_2305_SD.csv
-  - DATAMART_2306_AGS.csv
-  - DATAMART_2306_OCS.csv
-  - DATAMART_2306_SD.csv
-  - DATAMART_2307_AGS.csv
-  - DATAMART_2307_OCS.csv
-  - DATAMART_2307_SD.csv
-  - DATAMART_2308_SD.csv
-  - DATAMART_2309_AGS.csv
-  - DATAMART_2309_OCS.csv
-  - DATAMART_2309_SD.csv
-  - DATAMART_2310_AGS.csv
-  - DATAMART_2310_OCS.csv
-  - DATAMART_2310_SD.csv
-  - DATAMART_2311_AGS.csv
-  - DATAMART_2311_OCS.csv
-  - DATAMART_2311_SD.csv
-  - DATAMART_2312_AGS.csv
-  - DATAMART_2312_OCS.csv
-  - DATAMART_2312_SD.csv
-  - DATAMART_2401_AGS.csv
-  - DATAMART_2401_OCS.csv
-  - DATAMART_2401_SD.csv
-  - DATAMART_2402_AGS.csv
-  - DATAMART_2402_OCS.csv
-  - DATAMART_2402_SD.csv
-  - DATAMART_2403_AGS.csv
-  - DATAMART_2403_OCS.csv
-  - DATAMART_2403_SD.csv
-  - DATAMART_2404_AGS.csv
-  - DATAMART_2404_OCS.csv
-  - DATAMART_2404_SD.csv
-  - DATAMART_2405_AGS.csv
-  - DATAMART_2405_OCS.csv
-  - DATAMART_2406_AGS.csv
-  - DATAMART_2406_OCS.csv
-  - DATAMART_2406_SD.csv
-  - DATAMART_2407_AGS.csv
-  - DATAMART_2407_OCS.csv
-  - DATAMART_2407_SD.csv
-  - DATAMART_2408_SD.csv
-  - DATAMART_2409_AGS.csv
-  - DATAMART_2409_OCS.csv
-  - DATAMART_2409_SD.csv
-  - DATAMART_2410_AGS.csv
-  - DATAMART_2410_OCS.csv
-  - DATAMART_2410_SD.csv
-  - DATAMART_2411_AGS.csv
-  - DATAMART_2411_OCS.csv
-  - DATAMART_2411_SD.csv
-  - DATAMART_2412_AGS.csv
-  - DATAMART_2412_OCS.csv
-  - DATAMART_2412_SD.csv
-  - DATAMART_2501_AGS.csv
-  - DATAMART_2501_OCS.csv
-  - DATAMART_2501_SD.csv
-  - DATAMART_2502_AGS.csv
-  - DATAMART_2502_OCS.csv
-  - DATAMART_2502_SD.csv
-  - DATAMART_2503_AGS.csv
-  - DATAMART_2503_OCS.csv
-  - DATAMART_2503_SD.csv
-  - DATAMART_2504_AGS.csv
-  - DATAMART_2504_OCS.csv
-  - DATAMART_2504_SD.csv
-  - DATAMART_2505_AGS.csv
-  - DATAMART_2505_OCS.csv
-  - DATAMART_2505_SD.csv
-  - DATAMART_2506_AGS.csv
-  - DATAMART_2506_OCS.csv
-  - DATAMART_2506_SD.csv
-  - DATAMART_2507_AGS.csv
-  - DATAMART_2507_OCS.csv
-  - DATAMART_2507_SD.csv
-  - DATAMART_2508_AGS.csv
-  - DATAMART_2508_OCS.csv
-  - DATAMART_2508_SD.csv
-  - DATAMART_2509_AGS.csv
-  - DATAMART_2509_OCS.csv
-  - DATAMART_2509_SD.csv
-  - DATAMART_2510_AGS.csv
-  - DATAMART_2510_OCS.csv
-  - DATAMART_2510_SD.csv
-  - DATAMART_2511_AGS.csv
-  - DATAMART_2511_OCS.csv
-  - DATAMART_2511_SD.csv
-  - DATAMART_2512_AGS.csv
-  - DATAMART_2512_OCS.csv
-  - DATAMART_2512_SD.csv
-  - DATAMART_2601_AGS.csv
-  - DATAMART_2601_OCS.csv
-  - DATAMART_2601_SD.csv
-  - DATAMART_2602_AGS.csv
-  - DATAMART_2602_OCS.csv
-  - DATAMART_2602_SD.csv
-  - DATAMART_2603_AGS.csv
-  - DATAMART_2603_OCS.csv
-  - DATAMART_2604_AGS.csv
-  - DATAMART_2604_OCS.csv
-  - DATAMART_2604_SD.csv
-  - DATAMART_2605_AGS.csv
-  - DATAMART_2605_OCS.csv
-  - DATAMART_2605_SD.csv
-  - DATAMART_2606_AGS.csv
-  - DATAMART_2606_OCS.csv
-  - DATAMART_2606_SD.csv
-  - DATAMART_2607_AGS.csv
-  - DATAMART_2607_OCS.csv
-  - DATAMART_2607_SD.csv
-  - DATAMART_2608_SD.csv
-A apagar tabela existente: agpt_insurance_dv_catalog.wkb_bus_operations_claimsmotor.raw_datamart
-Tabela apagada.
+A carregar amostra de 1000 linhas...
+Amostra carregada: 1000 linhas
+A inferir tipos...
+Colunas de ingestão removidas: ['source_file', 'marca', 'load_timestamp']
 
-============================================================
-Processando: DATAMART_2301_AGS.csv
-============================================================
-Período: 2301
-Marca: AGS
-Ficheiro: /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/DATAMART_2301_AGS.csv (650,713,489 bytes)
-Delimitador detectado: ';' (encoding=latin1)
-Spark CSV OK (sep=';', encoding=latin1)
+[DELTA_COLUMN_NOT_FOUND_IN_SCHEMA] Couldn't find column id_policy in:
+root
+ |-- Desc_Company: string (nullable = true)
+ |-- No_Apólice: long (nullable = true)
+ |-- Ano_Mes_Ocorrencia: integer (nullable = true)
+ |-- Uw_Period: integer (nullable = true)
+ |-- Desc_ClientType: string (nullable = true)
+ |-- Desc_ClientType_Fleets: string (nullable = true)
+ |-- CDSUBRAMO: string (nullable = true)
+ |-- Desc_Segment: string (nullable = true)
+ |-- Dt_StartVigence: date (nullable = true)
+ |-- Dt_EndVigence: date (nullable = true)
+ |-- AC_Policy_Object: integer (nullable = true)
+ |-- AC_Policy: integer (nullable = true)
+ |-- UW_Policy_Object: integer (nullable = true)
+ |-- UW_Policy: integer (nullable = true)
+ |-- Val_Earn_Premium: decimal(18,2) (nullable = true)
+ |-- Val_Exposure: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium: decimal(18,2) (nullable = true)
+ |-- Num_Claim: integer (nullable = true)
+ |-- Num_ClaimCover: integer (nullable = true)
+ |-- Val_ClaimCover_Total: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_ADV: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_AE: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_AEcv: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_ALS: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_AMD: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_ASB: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_AST: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_ASV: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_AV: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_AVE: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_AVP: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_BAG: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_CCC: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_BAT: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_CRO: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_CRT: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_DNC: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_DP10: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_EX: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_FDN: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_FRB: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_IRE: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_ODV: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_PA: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_PC: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_PDU: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_PF: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_PMU: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_PNE: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_PPE: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_PSR: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_PT: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_PTJ: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_PTL: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_PUE: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_PV: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_QDV: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_QF: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_QIV: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_RC: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_RCF: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_RSP: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_SAS: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_SC: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_STS: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_VAV: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_VDS: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_VF: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_VN: decimal(18,2) (nullable = true)
+ |-- Amt_AnnCommercialPremium_VSA: decimal(18,2) (nullable = true)
+ |-- Num_ClaimCover_ADV: string (nullable = true)
+ |-- Num_ClaimCover_BAG: string (nullable = true)
+ |-- Num_ClaimCover_CCC: string (nullable = true)
+ |-- Num_ClaimCover_CRO: string (nullable = true)
+ |-- Num_ClaimCover_DNC: integer (nullable = true)
+ |-- Num_ClaimCover_DP10: string (nullable = true)
+ |-- Num_ClaimCover_FDN: string (nullable = true)
+ |-- Num_ClaimCover_FRB: string (nullable = true)
+ |-- Num_ClaimCover_IRE: string (nullable = true)
+ |-- Num_ClaimCover_ODV: string (nullable = true)
+ |-- Num_ClaimCover_PT: string (nullable = true)
+ |-- Num_ClaimCover_PUE: string (nullable = true)
+ |-- Num_ClaimCover_PUS: string (nullable = true)
+ |-- Num_ClaimCover_QIV: integer (nullable = true)
+ |-- Num_ClaimCover_RC: integer (nullable = true)
+ |-- Num_ClaimCover_VDS: string (nullable = true)
+ |-- Val_ClaimCover_ADV: string (nullable = true)
+ |-- Val_ClaimCover_BAG: string (nullable = true)
+ |-- Val_ClaimCover_CCC: string (nullable = true)
+ |-- Val_ClaimCover_CRO: string (nullable = true)
+ |-- Val_ClaimCover_DNC: integer (nullable = true)
+ |-- Val_ClaimCover_DP10: string (nullable = true)
+ |-- Val_ClaimCover_FDN: string (nullable = true)
+ |-- Val_ClaimCover_FRB: string (nullable = true)
+ |-- Val_ClaimCover_IRE: string (nullable = true)
+ |-- Val_ClaimCover_ODV: string (nullable = true)
+ |-- Val_ClaimCover_PT: string (nullable = true)
+ |-- Val_ClaimCover_PUE: string (nullable = true)
+ |-- Val_ClaimCover_PUS: string (nullable = true)
+ |-- Val_ClaimCover_QIV: decimal(18,2) (nullable = true)
+ |-- Val_ClaimCover_RC: decimal(18,2) (nullable = true)
+ |-- Val_ClaimCover_VDS: string (nullable = true)
+ |-- Custo_total: decimal(18,2) (nullable = true)
+ |-- No_sinistros_total103: integer (nullable = true)
+ |-- No_sinistros_total104: string (nullable = true)
+ |-- Acordos: string (nullable = true)
+ |-- MOT_SUP: string (nullable = true)
+ |-- CVE_TARIFA: integer (nullable = true)
+ |-- Product_Type: string (nullable = true)
+ |-- CDGARANTIA: string (nullable = true)
+ |-- CVE_UNIDADE_RISCO: integer (nullable = true)
+ |-- Desc_PaymentPlan: integer (nullable = true)
+ |-- MCOBROS_RESTO_RECIBO: string (nullable = true)
+ |-- Id_PolicyAge: integer (nullable = true)
+ |-- Dt_PlStartEffectDate: date (nullable = true)
+ |-- Dt_PlStartEmissDate: date (nullable = true)
+ |-- Dt_PlErlyExitEffctDate: date (nullable = true)
+ |-- Dt_PlEarlyExitEmDate: date (nullable = true)
+ |-- Desc_Situation: string (nullable = true)
+ |-- Desc_NewRenewal: string (nullable = true)
+ |-- DNI: integer (nullable = true)
+ |-- NM_CONTRIBUYNTE: integer (nullable = true)
+ |-- Dt_BirthPolicyHolder: date (nullable = true)
+ |-- Id_PolicyHolderAge: integer (nullable = true)
+ |-- CDPOSTAL124: string (nullable = true)
+ |-- Desc_PolicyHolderDistrict: string (nullable = true)
+ |-- Desc_PolicyHolderTown: string (nullable = true)
+ |-- CAE: integer (nullable = true)
+ |-- Id_DriverAge: integer (nullable = true)
+ |-- Id_DriverAgeRange: string (nullable = true)
+ |-- Dt_BirthDriver: date (nullable = true)
+ |-- Id_DayDtBirthDriver: integer (nullable = true)
+ |-- Dt_YoungCondition: string (nullable = true)
+ |-- Condutor_-_Sexo: string (nullable = true)
+ |-- ESTADO: string (nullable = true)
+ |-- CDPOSTAL135: string (nullable = true)
+ |-- Dt_DriverLicense: date (nullable = true)
+ |-- Id_DriverLicenceAge: integer (nullable = true)
+ |-- Id_DriverLicenceYear: integer (nullable = true)
+ |-- CVE_MATRICULA: string (nullable = true)
+ |-- Dt_VehicleLicense: date (nullable = true)
+ |-- Id_ImportedVehicle: integer (nullable = true)
+ |-- Id_VehicleLicenseYear: integer (nullable = true)
+ |-- DAT_ANO_CONSTRUCAO: integer (nullable = true)
+ |-- Id_VehicleAge: integer (nullable = true)
+ |-- Id_VehicleAgeRange: string (nullable = true)
+ |-- CVE_CATEGORIA: integer (nullable = true)
+ |-- Desc_VehicleTypeGroup: string (nullable = true)
+ |-- CVE_TIPO_SEGURO: string (nullable = true)
+ |-- CVE_CARROCARIA: string (nullable = true)
+ |-- ORIGEM: string (nullable = true)
+ |-- Veículo_-_Marca: string (nullable = true)
+ |-- CVE_MODELO: string (nullable = true)
+ |-- CVE_VERSAO: string (nullable = true)
+ |-- Veículo_-_Cód._Identif._EUROTAX: integer (nullable = true)
+ |-- NUM_CC: integer (nullable = true)
+ |-- Id_DisplacementRange: string (nullable = true)
+ |-- NUM_CV: integer (nullable = true)
+ |-- NUM_TARA: integer (nullable = true)
+ |-- QUA_PESO_BRUTO: integer (nullable = true)
+ |-- CVE_PESO_POTENCIA: decimal(18,2) (nullable = true)
+ |-- Id_WeightTaraRatio: integer (nullable = true)
+ |-- CVE_COMBUSTIVEL: string (nullable = true)
+ |-- CVE_PORTAS: integer (nullable = true)
+ |-- NUM_LUGARES: integer (nullable = true)
+ |-- Val_VehicleCapital: decimal(18,2) (nullable = true)
+ |-- Val_VehicleCapitalRange: string (nullable = true)
+ |-- Val_VehicleCapitalWithoutExtras: decimal(18,2) (nullable = true)
+ |-- Val_Extras: decimal(18,2) (nullable = true)
+ |-- Id_SectorActivityPolicyHolder: string (nullable = true)
+ |-- SECTOR_DESC: string (nullable = true)
+ |-- CDAGENTE: integer (nullable = true)
+ |-- Desc_MediatorName: string (nullable = true)
+ |-- CVE_ZONA_RC: integer (nullable = true)
+ |-- CVE_ZONA_DP: integer (nullable = true)
+ |-- CVE_CLASSE_DP: string (nullable = true)
+ |-- Ind_OnwDamage: integer (nullable = true)
+ |-- Ind_Collision: integer (nullable = true)
+ |-- Ind_Theft: integer (nullable = true)
+ |-- Ind_Windscreen: integer (nullable = true)
+ |-- Campanha_Mobis: string (nullable = true)
+ |-- NSUPLEMENTO: integer (nullable = true)
+ |-- CVE_PROTOCOLO: string (nullable = true)
+ |-- Desc_SectorActivityGroup: string (nullable = true)
+ |-- QUA_VALOR_NOVO: decimal(18,2) (nullable = true)
+ |-- CVE_USO: integer (nullable = true)
+ |-- NUMERO_ISP_NOVO: string (nullable = true)
+ |-- DSNOMBRE187: string (nullable = true)
+ |-- DSNOMBRE188: string (nullable = true)
+ |-- DSNOMBRE189: string (nullable = true)
+ |-- CDINSPECTOR: integer (nullable = true)
+ |-- Desc_MediatorInspector: string (nullable = true)
+ |-- DSCANAL: string (nullable = true)
+ |-- DSTIPOLOGIA: string (nullable = true)
+ |-- DSCLASIFICACION: string (nullable = true)
+ |-- Desc_MediatorSituation: string (nullable = true)
+ |-- CVE_BM_INICIAL: integer (nullable = true)
+ |-- Desc_DriverRegiao: string (nullable = true)
+ |-- Desc_DriverZona: string (nullable = true)
+ |-- Dt_ExclusionVehicleLicense: string (nullable = true)
+ |-- Dt_InclusionVehicleLicense: string (nullable = true)
+ |-- BonusMalusRange: string (nullable = true)
+ |-- Num_ClaimCover_Without_Credor_0: integer (nullable = true)
+ |-- Val_Motor_Total_Without_Credor: decimal(18,2) (nullable = true)
+ |-- periodo: integer (nullable = true)
 
-ERRO NO FICHEIRO: DATAMART_2301_AGS.csv
-[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column, variable, or function parameter with name `Veículo_-_Cód`.`_Identif`.`_EUROTAX` cannot be resolved. Did you mean one of the following? [`Veículo_-_Cód._Identif._EUROTAX`, `Veículo_-_Marca`, `Val_ClaimCover_CRO`, `Desc_ClientType`, `Desc_ClientType_Fleets`]. SQLSTATE: 42703;
-'Aggregate [unresolvedalias(count(1))]
-+- 'Project [unresolvedstarwithcolumns(Val_Motor_Total_Without_Credor, cast('Val_Motor_Total_Without_Credor as string collate UTF8_BINARY), Some(List({})))]
-   +- 'Project [unresolvedstarwithcolumns(Num_ClaimCover_Without_Credor_0, cast('Num_ClaimCover_Without_Credor_0 as string collate UTF8_BINARY), Some(List({})))]
-      +- 'Project [unresolvedstarwithcolumns(BonusMalusRange, cast('BonusMalusRange as string collate UTF8_BINARY), Some(List({})))]
-         +- 'Project [unresolvedstarwithcolumns(Dt_InclusionVehicleLicense, cast('Dt_InclusionVehicleLicense as string collate UTF8_BINARY), Some(List({})))]
-            +- 'Project [unresolvedstarwithcolumns(Dt_ExclusionVehicleLicense, cast('Dt_ExclusionVehicleLicense as string collate UTF8_BINARY), Some(List({})))]
-               +- 'Project [unresolvedstarwithcolumns(Desc_DriverZona, cast('Desc_DriverZona as string collate UTF8_BINARY), Some(List({})))]
-                  +- 'Project [unresolvedstarwithcolumns(Desc_DriverRegiao, cast('Desc_DriverRegiao as string collate UTF8_BINARY), Some(List({})))]
-                     +- 'Project [unresolvedstarwithcolumns(CVE_BM_INICIAL, cast('CVE_BM_INICIAL as string collate UTF8_BINARY), Some(List({})))]
-                        +- 'Project [unresolvedstarwithcolumns(Desc_MediatorSituation, cast('Desc_MediatorSituation as string collate UTF8_BINARY), Some(List({})))]
-                           +- 'Project [unresolvedstarwithcolumns(DSCLASIFICACION, cast('DSCLASIFICACION as string collate UTF8_BINARY), Some(List({})))]
-                              +- 'Project [unresolvedstarwithcolumns(DSTIPOLOGIA, cast('DSTIPOLOGIA as string collate UTF8_BINARY), Some(List({})))]
-                                 +- 'Project [unresolvedstarwithcolumns(DSCANAL, cast('DSCANAL as string collate UTF8_BINARY), Some(List({})))]
-                                    +- 'Project [unresolvedstarwithcolumns(Desc_MediatorInspector, cast('Desc_MediatorInspector as string collate UTF8_BINARY), Some(List({})))]
-                                       +- 'Project [unresolvedstarwithcolumns(CDINSPECTOR, cast('CDINSPECTOR as string collate UTF8_BINARY), Some(List({})))]
-                                          +- 'Project [unresolvedstarwithcolumns(DSNOMBRE189, cast('DSNOMBRE189 as string collate UTF8_BINARY), Some(List({})))]
-                                             +- 'Project [unresolvedstarwithcolumns(DSNOMBRE188, cast('DSNOMBRE188 as string collate UTF8_BINARY), Some(List({})))]
-                                                +- 'Project [unresolvedstarwithcolumns(DSNOMBRE187, cast('DSNOMBRE187 as string collate UTF8_BINARY), Some(List({})))]
-                                                   +- 'Project [unresolvedstarwithcolumns(NUMERO_ISP_NOVO, cast('NUMERO_ISP_NOVO as string collate UTF8_BINARY), Some(List({})))]
-                                                      +- 'Project [unresolvedstarwithcolumns(CVE_USO, cast('CVE_USO as string collate UTF8_BINARY), Some(List({})))]
-                                                         +- 'Project [unresolvedstarwithcolumns(QUA_VALOR_NOVO, cast('QUA_VALOR_NOVO as string collate UTF8_BINARY), Some(List({})))]
-                                                            +- 'Project [unresolvedstarwithcolumns(Desc_SectorActivityGroup, cast('Desc_SectorActivityGroup as string collate UTF8_BINARY), Some(List({})))]
-                                                               +- 'Project [unresolvedstarwithcolumns(CVE_PROTOCOLO, cast('CVE_PROTOCOLO as string collate UTF8_BINARY), Some(List({})))]
-                                                                  +- 'Project [unresolvedstarwithcolumns(NSUPLEMENTO, cast('NSUPLEMENTO as string collate UTF8_BINARY), Some(List({})))]
-                                                                     +- 'Project [unresolvedstarwithcolumns(Campanha_Mobis, cast('Campanha_Mobis as string collate UTF8_BINARY), Some(List({})))]
-                                                                        +- 'Project [unresolvedstarwithcolumns(Ind_Windscreen, cast('Ind_Windscreen as string collate UTF8_BINARY), Some(List({})))]
-                                                                           +- 'Project [unresolvedstarwithcolumns(Ind_Theft, cast('Ind_Theft as string collate UTF8_BINARY), Some(List({})))]
-                                                                              +- 'Project [unresolvedstarwithcolumns(Ind_Collision, cast('Ind_Collision as string collate UTF8_BINARY), Some(List({})))]
-                                                                                 +- 'Project [unresolvedstarwithcolumns(Ind_OnwDamage, cast('Ind_OnwDamage as string collate UTF8_BINARY), Some(List({})))]
-                                                                                    +- 'Project [unresolvedstarwithcolumns(CVE_CLASSE_DP, cast('CVE_CLASSE_DP as string collate UTF8_BINARY), Some(List({})))]
-                                                                                       +- 'Project [unresolvedstarwithcolumns(CVE_ZONA_DP, cast('CVE_ZONA_DP as string collate UTF8_BINARY), Some(List({})))]
-                                                                                          +- 'Project [unresolvedstarwithcolumns(CVE_ZONA_RC, cast('CVE_ZONA_RC as string collate UTF8_BINARY), Some(List({})))]
-                                                                                             +- 'Project [unresolvedstarwithcolumns(Desc_MediatorName, cast('Desc_MediatorName as string collate UTF8_BINARY), Some(List({})))]
-                                                                                                +- 'Project [unresolvedstarwithcolumns(CDAGENTE, cast('CDAGENTE as string collate UTF8_BINARY), Some(List({})))]
-                                                                                                   +- 'Project [unresolvedstarwithcolumns(SECTOR_DESC, cast('SECTOR_DESC as string collate UTF8_BINARY), Some(List({})))]
-                                                                                                      +- 'Project [unresolvedstarwithcolumns(Id_SectorActivityPolicyHolder, cast('Id_SectorActivityPolicyHolder as string collate UTF8_BINARY), Some(List({})))]
-                                                                                                         +- 'Project [unresolvedstarwithcolumns(Val_Extras, cast('Val_Extras as string collate UTF8_BINARY), Some(List({})))]
-                                                                                                            +- 'Project [unresolvedstarwithcolumns(Val_VehicleCapitalWithoutExtras, cast('Val_VehicleCapitalWithoutExtras as string collate UTF8_BINARY), Some(List({})))]
-                                                                                                               +- 'Project [unresolvedstarwithcolumns(Val_VehicleCapitalRange, cast('Val_VehicleCapitalRange as string collate UTF8_BINARY), Some(List({})))]
-                                                                                                                  +- 'Project [unresolvedstarwithcolumns(Val_VehicleCapital, cast('Val_VehicleCapital as string collate UTF8_BINARY), Some(List({})))]
-                                                                                                                     +- 'Project [unresolvedstarwithcolumns(NUM_LUGARES, cast('NUM_LUGARES as string collate UTF8_BINARY), Some(List({})))]
-                                                                                                                        +- 'Project [unresolvedstarwithcolumns(CVE_PORTAS, cast('CVE_PORTAS as string collate UTF8_BINARY), Some(List({})))]
-                                                                                                                           +- 'Project [unresolvedstarwithcolumns(CVE_COMBUSTIVEL, cast('CVE_COMBUSTIVEL as string collate UTF8_BINARY), Some(List({})))]
-                                                                                                                              +- 'Project [unresolvedstarwithcolumns(Id_WeightTaraRatio, cast('Id_WeightTaraRatio as string collate UTF8_BINARY), Some(List({})))]
-                                                                                                                                 +- 'Project [unresolvedstarwithcolumns(CVE_PESO_POTENCIA, cast('CVE_PESO_POTENCIA as string collate UTF8_BINARY), Some(List({})))]
-                                                                                                                                    +- 'Project [unresolvedstarwithcolumns(QUA_PESO_BRUTO, cast('QUA_PESO_BRUTO as string collate UTF8_BINARY), Some(List({})))]
-                                                                                                                                       +- 'Project [unresolvedstarwithcolumns(NUM_TARA, cast('NUM_TARA as string collate UTF8_BINARY), Some(List({})))]
-                                                                                                                                          +- 'Project [unresolvedstarwithcolumns(NUM_CV, cast('NUM_CV as string collate UTF8_BINARY), Some(List({})))]
-                                                                                                                                             +- 'Project [unresolvedstarwithcolumns(Id_DisplacementRange, cast('Id_DisplacementRange as string collate UTF8_BINARY), Some(List({})))]
-                                                                                                                                                +- 'Project [unresolvedstarwithcolumns(NUM_CC, cast('NUM_CC as string collate UTF8_BINARY), Some(List({})))]
-                                                                                                                                                   +- 'Project [Desc_Company#201668, No_Apólice#201670, Ano_Mes_Ocorrencia#201672, Uw_Period#201674, Desc_ClientType#201676, Desc_ClientType_Fleets#201678, CDSUBRAMO#201680, Desc_Segment#201682, Dt_StartVigence#201684, Dt_EndVigence#201686, AC_Policy_Object#201688, AC_Policy#201690, UW_Policy_Object#201692, UW_Policy#201694, Val_Earn_Premium#201696, Val_Exposure#201698, Amt_AnnCommercialPremium#201700, Num_Claim#201702, Num_ClaimCover#201704, Val_ClaimCover_Total#201706, Amt_AnnCommercialPremium_ADV#201708, Amt_AnnCommercialPremium_AE#201710, Amt_AnnCommercialPremium_AEcv#201712, Amt_AnnCommercialPremium_ALS#201714, Amt_AnnCommercialPremium_AMD#201716, ... 179 more fields]
-                                                                                                                                                      +- Project [Desc_Company#201668, No_Apólice#201670, Ano_Mes_Ocorrencia#201672, Uw_Period#201674, Desc_ClientType#201676, Desc_ClientType_Fleets#201678, CDSUBRAMO#201680, Desc_Segment#201682, Dt_StartVigence#201684, Dt_EndVigence#201686, AC_Policy_Object#201688, AC_Policy#201690, UW_Policy_Object#201692, UW_Policy#201694, Val_Earn_Premium#201696, Val_Exposure#201698, Amt_AnnCommercialPremium#201700, Num_Claim#201702, Num_ClaimCover#201704, Val_ClaimCover_Total#201706, Amt_AnnCommercialPremium_ADV#201708, Amt_AnnCommercialPremium_AE#201710, Amt_AnnCommercialPremium_AEcv#201712, Amt_AnnCommercialPremium_ALS#201714, Amt_AnnCommercialPremium_AMD#201716, ... 179 more fields]
-                                                                                                                                                         +- Project [Desc_Company#201668, No_Apólice#201670, Ano_Mes_Ocorrencia#201672, Uw_Period#201674, Desc_ClientType#201676, Desc_ClientType_Fleets#201678, CDSUBRAMO#201680, Desc_Segment#201682, Dt_StartVigence#201684, Dt_EndVigence#201686, AC_Policy_Object#201688, AC_Policy#201690, UW_Policy_Object#201692, UW_Policy#201694, Val_Earn_Premium#201696, Val_Exposure#201698, Amt_AnnCommercialPremium#201700, Num_Claim#201702, Num_ClaimCover#201704, Val_ClaimCover_Total#201706, Amt_AnnCommercialPremium_ADV#201708, Amt_AnnCommercialPremium_AE#201710, Amt_AnnCommercialPremium_AEcv#201712, Amt_AnnCommercialPremium_ALS#201714, Amt_AnnCommercialPremium_AMD#201716, ... 179 more fields]
-                                                                                                                                                            +- Project [Desc_Company#201668, No_Apólice#201670, Ano_Mes_Ocorrencia#201672, Uw_Period#201674, Desc_ClientType#201676, Desc_ClientType_Fleets#201678, CDSUBRAMO#201680, Desc_Segment#201682, Dt_StartVigence#201684, Dt_EndVigence#201686, AC_Policy_Object#201688, AC_Policy#201690, UW_Policy_Object#201692, UW_Policy#201694, Val_Earn_Premium#201696, Val_Exposure#201698, Amt_AnnCommercialPremium#201700, Num_Claim#201702, Num_ClaimCover#201704, Val_ClaimCover_Total#201706, Amt_AnnCommercialPremium_ADV#201708, Amt_AnnCommercialPremium_AE#201710, Amt_AnnCommercialPremium_AEcv#201712, Amt_AnnCommercialPremium_ALS#201714, Amt_AnnCommercialPremium_AMD#201716, ... 179 more fields]
-                                                                                                                                                               +- Project [Desc_Company#201668, No_Apólice#201670, Ano_Mes_Ocorrencia#201672, Uw_Period#201674, Desc_ClientType#201676, Desc_ClientType_Fleets#201678, CDSUBRAMO#201680, Desc_Segment#201682, Dt_StartVigence#201684, Dt_EndVigence#201686, AC_Policy_Object#201688, AC_Policy#201690, UW_Policy_Object#201692, UW_Policy#201694, Val_Earn_Premium#201696, Val_Exposure#201698, Amt_AnnCommercialPremium#201700, Num_Claim#201702, Num_ClaimCover#201704, Val_ClaimCover_Total#201706, Amt_AnnCommercialPremium_ADV#201708, Amt_AnnCommercialPremium_AE#201710, Amt_AnnCommercialPremium_AEcv#201712, Amt_AnnCommercialPremium_ALS#201714, Amt_AnnCommercialPremium_AMD#201716, ... 179 more fields]
-                                                                                                                                                                  +- Project [Desc_Company#201668, No_Apólice#201670, Ano_Mes_Ocorrencia#201672, Uw_Period#201674, Desc_ClientType#201676, Desc_ClientType_Fleets#201678, CDSUBRAMO#201680, Desc_Segment#201682, Dt_StartVigence#201684, Dt_EndVigence#201686, AC_Policy_Object#201688, AC_Policy#201690, UW_Policy_Object#201692, UW_Policy#201694, Val_Earn_Premium#201696, Val_Exposure#201698, Amt_AnnCommercialPremium#201700, Num_Claim#201702, Num_ClaimCover#201704, Val_ClaimCover_Total#201706, Amt_AnnCommercialPremium_ADV#201708, Amt_AnnCommercialPremium_AE#201710, Amt_AnnCommercialPremium_AEcv#201712, Amt_AnnCommercialPremium_ALS#201714, Amt_AnnCommercialPremium_AMD#201716, ... 179 more fields]
-                                                                                                                                                                     +- Project [Desc_Company#201668, No_Apólice#201670, Ano_Mes_Ocorrencia#201672, Uw_Period#201674, Desc_ClientType#201676, Desc_ClientType_Fleets#201678, CDSUBRAMO#201680, Desc_Segment#201682, Dt_StartVigence#201684, Dt_EndVigence#201686, AC_Policy_Object#201688, AC_Policy#201690, UW_Policy_Object#201692, UW_Policy#201694, Val_Earn_Premium#201696, Val_Exposure#201698, Amt_AnnCommercialPremium#201700, Num_Claim#201702, Num_ClaimCover#201704, Val_ClaimCover_Total#201706, Amt_AnnCommercialPremium_ADV#201708, Amt_AnnCommercialPremium_AE#201710, Amt_AnnCommercialPremium_AEcv#201712, Amt_AnnCommercialPremium_ALS#201714, Amt_AnnCommercialPremium_AMD#201716, ... 179 more fields]
-                                                                                                                                                                        +- Project [Desc_Company#201668, No_Apólice#201670, Ano_Mes_Ocorrencia#201672, Uw_Period#201674, Desc_ClientType#201676, Desc_ClientType_Fleets#201678, CDSUBRAMO#201680, Desc_Segment#201682, Dt_StartVigence#201684, Dt_EndVigence#201686, AC_Policy_Object#201688, AC_Policy#201690, UW_Policy_Object#201692, UW_Policy#201694, Val_Earn_Premium#201696, Val_Exposure#201698, Amt_AnnCommercialPremium#201700, Num_Claim#201702, Num_ClaimCover#201704, Val_ClaimCover_Total#201706, Amt_AnnCommercialPremium_ADV#201708, Amt_AnnCommercialPremium_AE#201710, Amt_AnnCommercialPremium_AEcv#201712, Amt_AnnCommercialPremium_ALS#201714, Amt_AnnCommercialPremium_AMD#201716, ... 179 more fields]
-                                                                                                                                                                           +- Project [Desc_Company#201668, No_Apólice#201670, Ano_Mes_Ocorrencia#201672, Uw_Period#201674, Desc_ClientType#201676, Desc_ClientType_Fleets#201678, CDSUBRAMO#201680, Desc_Segment#201682, Dt_StartVigence#201684, Dt_EndVigence#201686, AC_Policy_Object#201688, AC_Policy#201690, UW_Policy_Object#201692, UW_Policy#201694, Val_Earn_Premium#201696, Val_Exposure#201698, Amt_AnnCommercialPremium#201700, Num_Claim#201702, Num_ClaimCover#201704, Val_ClaimCover_Total#201706, Amt_AnnCommercialPremium_ADV#201708, Amt_AnnCommercialPremium_AE#201710, Amt_AnnCommercialPremium_AEcv#201712, Amt_AnnCommercialPremium_ALS#201714, Amt_AnnCommercialPremium_AMD#201716, ... 179 more fields]
-                                                                                                                                                                              +- Project [Desc_Company#201668, No_Apólice#201670, Ano_Mes_Ocorrencia#201672, Uw_Period#201674, Desc_ClientType#201676, Desc_ClientType_Fleets#201678, CDSUBRAMO#201680, Desc_Segment#201682, Dt_StartVigence#201684, Dt_EndVigence#201686, AC_Policy_Object#201688, AC_Policy#201690, UW_Policy_Object#201692, UW_Policy#201694, Val_Earn_Premium#201696, Val_Exposure#201698, Amt_AnnCommercialPremium#201700, Num_Claim#201702, Num_ClaimCover#201704, Val_ClaimCover_Total#201706, Amt_AnnCommercialPremium_ADV#201708, Amt_AnnCommercialPremium_AE#201710, Amt_AnnCommercialPremium_AEcv#201712, Amt_AnnCommercialPremium_ALS#201714, Amt_AnnCommercialPremium_AMD#201716, ... 179 more fields]
-                                                                                                                                                                                 +- Project [Desc_Company#201668, No_Apólice#201670, Ano_Mes_Ocorrencia#201672, Uw_Period#201674, Desc_ClientType#201676, Desc_ClientType_Fleets#201678, CDSUBRAMO#201680, Desc_Segment#201682, Dt_StartVigence#201684, Dt_EndVigence#201686, AC_Policy_Object#201688, AC_Policy#201690, UW_Policy_Object#201692, UW_Policy#201694, Val_Earn_Premium#201696, Val_Exposure#201698, Amt_AnnCommercialPremium#201700, Num_Claim#201702, Num_ClaimCover#201704, Val_ClaimCover_Total#201706, Amt_AnnCommercialPremium_ADV#201708, Amt_AnnCommercialPremium_AE#201710, Amt_AnnCommercialPremium_AEcv#201712, Amt_AnnCommercialPremium_ALS#201714, Amt_AnnCommercialPremium_AMD#201716, ... 179 more fields]
-                                                                                                                                                                                    +- Project [Desc_Company#201668, No_Apólice#201670, Ano_Mes_Ocorrencia#201672, Uw_Period#201674, Desc_ClientType#201676, Desc_ClientType_Fleets#201678, CDSUBRAMO#201680, Desc_Segment#201682, Dt_StartVigence#201684, Dt_EndVigence#201686, AC_Policy_Object#201688, AC_Policy#201690, UW_Policy_Object#201692, UW_Policy#201694, Val_Earn_Premium#201696, Val_Exposure#201698, Amt_AnnCommercialPremium#201700, Num_Claim#201702, Num_ClaimCover#201704, Val_ClaimCover_Total#201706, Amt_AnnCommercialPremium_ADV#201708, Amt_AnnCommercialPremium_AE#201710, Amt_AnnCommercialPremium_AEcv#201712, Amt_AnnCommercialPremium_ALS#201714, Amt_AnnCommercialPremium_AMD#201716, ... 179 more fields]
-                                                                                                                                                                                       +- Project [Desc_Company#201668, No_Apólice#201670, Ano_Mes_Ocorrencia#201672, Uw_Period#201674, Desc_ClientType#201676, Desc_ClientType_Fleets#201678, CDSUBRAMO#201680, Desc_Segment#201682, Dt_StartVigence#201684, Dt_EndVigence#201686, AC_Policy_Object#201688, AC_Policy#201690, UW_Policy_Object#201692, UW_Policy#201694, Val_Earn_Premium#201696, Val_Exposure#201698, Amt_AnnCommercialPremium#201700, Num_Claim#201702, Num_ClaimCover#201704, Val_ClaimCover_Total#201706, Amt_AnnCommercialPremium_ADV#201708, Amt_AnnCommercialPremium_AE#201710, Amt_AnnCommercialPremium_AEcv#201712, Amt_AnnCommercialPremium_ALS#201714, Amt_AnnCommercialPremium_AMD#201716, ... 179 more fields]
-                                                                                                                                                                                          +- Project [Desc_Company#201668, No_Apólice#201670, Ano_Mes_Ocorrencia#201672, Uw_Period#201674, Desc_ClientType#201676, Desc_ClientType_Fleets#201678, CDSUBRAMO#201680, Desc_Segment#201682, Dt_StartVigence#201684, Dt_EndVigence#201686, AC_Policy_Object#2016
-
-... [*** WARNING: max output size exceeded, skipping output. ***] ...
-
-de.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$foreachUp$1$adapted(TreeNode.scala:456)
-	at scala.collection.immutable.Vector.foreach(Vector.scala:2125)
-	at org.apache.spark.sql.catalyst.trees.TreeNode.foreachUp(TreeNode.scala:456)
-	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.checkAnalysis0(CheckAnalysis.scala:449)
-	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.checkAnalysis0$(CheckAnalysis.scala:416)
-	at org.apache.spark.sql.catalyst.analysis.Analyzer.checkAnalysis0(Analyzer.scala:751)
-	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.$anonfun$checkAnalysis$1(CheckAnalysis.scala:401)
-	at scala.runtime.java8.JFunction0$mcV$sp.apply(JFunction0$mcV$sp.scala:18)
-	at com.databricks.spark.util.FrameProfiler$.record(FrameProfiler.scala:115)
-	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.checkAnalysis(CheckAnalysis.scala:388)
-	at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.checkAnalysis$(CheckAnalysis.scala:384)
-	at org.apache.spark.sql.catalyst.analysis.Analyzer.checkAnalysis(Analyzer.scala:751)
-	at org.apache.spark.sql.catalyst.analysis.resolver.HybridAnalyzer.$anonfun$resolveInFixedPoint$1(HybridAnalyzer.scala:489)
-	at scala.runtime.java8.JFunction0$mcV$sp.apply(JFunction0$mcV$sp.scala:18)
-	at org.apache.spark.sql.catalyst.QueryPlanningTracker$.withTracker(QueryPlanningTracker.scala:305)
-	at org.apache.spark.sql.catalyst.analysis.resolver.HybridAnalyzer.resolveInFixedPoint(HybridAnalyzer.scala:489)
-	at org.apache.spark.sql.catalyst.analysis.resolver.HybridAnalyzer.$anonfun$apply$1(HybridAnalyzer.scala:94)
-	at org.apache.spark.sql.catalyst.analysis.resolver.HybridAnalyzer.withTrackedAnalyzerBridgeState(HybridAnalyzer.scala:131)
-	at org.apache.spark.sql.catalyst.analysis.resolver.HybridAnalyzer.apply(HybridAnalyzer.scala:87)
-	at org.apache.spark.sql.catalyst.analysis.Analyzer.runAnalysis$1(Analyzer.scala:814)
-	at org.apache.spark.sql.catalyst.analysis.Analyzer.$anonfun$executeAndCheck$3(Analyzer.scala:819)
-	at org.apache.spark.sql.catalyst.analysis.Analyzer.runWithSessionConf(Analyzer.scala:887)
-	at org.apache.spark.sql.catalyst.analysis.Analyzer.$anonfun$executeAndCheck$2(Analyzer.scala:819)
-	at org.apache.spark.sql.catalyst.plans.logical.AnalysisHelper$.markInAnalyzer(AnalysisHelper.scala:448)
-	at org.apache.spark.sql.catalyst.analysis.Analyzer.$anonfun$executeAndCheck$1(Analyzer.scala:819)
-	at com.databricks.sql.unity.SAMSnapshotHelper$.visitPlansDuringAnalysis(SAMSnapshotHelper.scala:72)
-	at org.apache.spark.sql.catalyst.analysis.Analyzer.executeAndCheck(Analyzer.scala:809)
-	at org.apache.spark.sql.execution.QueryExecution.$anonfun$lazyAnalyzed$4(QueryExecution.scala:870)
-	at org.apache.spark.sql.catalyst.QueryPlanningTracker$.measureRule(QueryPlanningTracker.scala:533)
-	at org.apache.spark.sql.catalyst.QueryPlanningTracker$.recordLatency(QueryPlanningTracker.scala:542)
-	at org.apache.spark.sql.execution.QueryExecution.$anonfun$lazyAnalyzed$3(QueryExecution.scala:871)
-	at com.databricks.spark.util.FrameProfiler$.record(FrameProfiler.scala:115)
-	at org.apache.spark.sql.catalyst.QueryPlanningTracker.measurePhase(QueryPlanningTracker.scala:1364)
-	at org.apache.spark.sql.execution.QueryExecution.$anonfun$executePhase$8(QueryExecution.scala:1637)
-	at org.apache.spark.sql.execution.SQLExecution$.withPreExecutionPhaseTransition(SQLExecution.scala:1813)
-	at org.apache.spark.sql.execution.SQLExecution$.$anonfun$withExecutionPhase$1(SQLExecution.scala:388)
-	at com.databricks.util.TracingSpanUtils$.withTracing(TracingSpanUtils.scala:251)
-	at com.databricks.spark.util.DatabricksTracingHelper.withSpan(DatabricksSparkTracingHelper.scala:290)
-	at com.databricks.spark.util.DBRTracing$.withSpan(DBRTracing.scala:87)
-	at org.apache.spark.sql.execution.SQLExecution$.withExecutionPhase(SQLExecution.scala:367)
-	at org.apache.spark.sql.execution.QueryExecution.$anonfun$executePhase$7(QueryExecution.scala:1637)
-	at org.apache.spark.sql.execution.QueryExecution$.withInternalError(QueryExecution.scala:2543)
-	at org.apache.spark.sql.execution.QueryExecution.$anonfun$executePhase$5(QueryExecution.scala:1628)
-	at com.databricks.util.LexicalThreadLocal$Handle.runWith(LexicalThreadLocal.scala:63)
-	at org.apache.spark.sql.execution.QueryExecution.$anonfun$executePhase$4(QueryExecution.scala:1625)
-	at com.databricks.util.LexicalThreadLocal$Handle.runWith(LexicalThreadLocal.scala:63)
-	at org.apache.spark.sql.execution.QueryExecution.$anonfun$executePhase$3(QueryExecution.scala:1625)
-	at com.databricks.util.LexicalThreadLocal$Handle.runWith(LexicalThreadLocal.scala:63)
-	at org.apache.spark.sql.execution.QueryExecution.$anonfun$executePhase$2(QueryExecution.scala:1624)
-	at com.databricks.sql.history.ultron.PredictionBackendBatching$.$anonfun$withBatchedUpdates$1(ObservationBuffer.scala:484)
-	at com.databricks.util.LexicalThreadLocal$Handle.runWith(LexicalThreadLocal.scala:63)
-	at com.databricks.sql.history.ultron.PredictionBackendBatching$.withBatchedUpdates(ObservationBuffer.scala:484)
-	at org.apache.spark.sql.execution.QueryExecution.$anonfun$withQueryExecutionId$3(QueryExecution.scala:1604)
-	at com.databricks.util.LexicalThreadLocal$Handle.runWith(LexicalThreadLocal.scala:63)
-	at org.apache.spark.sql.execution.QueryExecution.localBlock$1(QueryExecution.scala:1603)
-	at org.apache.spark.sql.execution.QueryExecution.$anonfun$withQueryExecutionId$5(QueryExecution.scala:1615)
-	at com.databricks.unity.UCSManager$.withTemporaryScope(UCSManager.scala:168)
-	at org.apache.spark.sql.execution.QueryExecution.$anonfun$withQueryExecutionId$4(QueryExecution.scala:1614)
-	at org.apache.spark.sql.execution.QueryExecution$.$anonfun$runWithWrappers$2(QueryExecution.scala:2804)
-	at org.apache.spark.sql.execution.QueryExecution$.org$apache$spark$sql$execution$QueryExecution$$runWithWrappers(QueryExecution.scala:2803)
-	at org.apache.spark.sql.execution.QueryExecution.withQueryExecutionId(QueryExecution.scala:1615)
-	at org.apache.spark.sql.execution.QueryExecution.$anonfun$executePhase$1(QueryExecution.scala:1623)
-	at org.apache.spark.sql.SparkSession.withActive(SparkSession.scala:866)
-	at org.apache.spark.sql.execution.QueryExecution.executePhase(QueryExecution.scala:1622)
-	at org.apache.spark.sql.execution.QueryExecution.$anonfun$lazyAnalyzed$2(QueryExecution.scala:862)
-	at com.databricks.sql.util.MemoryTrackerHelper.withMemoryTracking(MemoryTrackerHelper.scala:111)
-	at org.apache.spark.sql.execution.QueryExecution.$anonfun$lazyAnalyzed$1(QueryExecution.scala:861)
-	at scala.util.Try$.apply(Try.scala:217)
-	at org.apache.spark.util.Utils$.doTryWithCallerStacktrace(Utils.scala:1798)
-	at org.apache.spark.util.Utils$.getTryWithCallerStacktrace(Utils.scala:1848)
-	at org.apache.spark.util.LazyTry.get(LazyTry.scala:78)
-	at org.apache.spark.sql.execution.QueryExecution.$anonfun$analyzed$1(QueryExecution.scala:977)
-	at org.apache.spark.sql.execution.QueryExecution.withAbortTransactionOnFailure(QueryExecution.scala:2041)
-	at org.apache.spark.sql.execution.QueryExecution.analyzed(QueryExecution.scala:977)
-	at org.apache.spark.sql.execution.QueryExecution.assertAnalyzed(QueryExecution.scala:728)
-	at org.apache.spark.sql.classic.Dataset$.$anonfun$ofRows$13(Dataset.scala:264)
-	at org.apache.spark.sql.SparkSession.withActive(SparkSession.scala:866)
-	at org.apache.spark.sql.classic.Dataset$.ofRows(Dataset.scala:261)
-	at org.apache.spark.sql.connect.execution.SparkConnectPlanExecution.$anonfun$handlePlan$11(SparkConnectPlanExecution.scala:174)
-	at org.apache.spark.sql.connect.utils.TimingUtils$.withTiming(TimingUtils.scala:35)
-	at org.apache.spark.sql.connect.execution.SparkConnectPlanExecution.handlePlan(SparkConnectPlanExecution.scala:169)
-	at org.apache.spark.sql.connect.execution.ExecuteThreadRunner.$anonfun$handlePlan$1(ExecuteThreadRunner.scala:543)
-	at scala.runtime.java8.JFunction0$mcV$sp.apply(JFunction0$mcV$sp.scala:18)
-	at org.apache.spark.sql.execution.SQLExecution$.withPreExecutionPhaseWatch(SQLExecution.scala:1822)
-	at org.apache.spark.sql.connect.execution.ExecuteThreadRunner.withPreExecutionPhaseWatch(ExecuteThreadRunner.scala:553)
-	at org.apache.spark.sql.connect.execution.ExecuteThreadRunner.handlePlan(ExecuteThreadRunner.scala:543)
-	at org.apache.spark.sql.connect.execution.ExecuteThreadRunner.$anonfun$executeInternal$15(ExecuteThreadRunner.scala:443)
-	at scala.runtime.java8.JFunction0$mcV$sp.apply(JFunction0$mcV$sp.scala:18)
-	at com.databricks.util.LexicalThreadLocal$Handle.runWith(LexicalThreadLocal.scala:63)
-	at org.apache.spark.sql.connect.execution.SparkConnectUdfRejectionScope$.withExecutionSideEffectScope(SparkConnectUdfRejectionScope.scala:31)
-	at org.apache.spark.sql.connect.execution.ExecuteThreadRunner.$anonfun$executeInternal$1(ExecuteThreadRunner.scala:441)
-	at org.apache.spark.sql.connect.execution.ExecuteThreadRunner.$anonfun$executeInternal$1$adapted(ExecuteThreadRunner.scala:348)
-	at org.apache.spark.sql.connect.service.SessionHolder.$anonfun$withSession$2(SessionHolder.scala:962)
-	at org.apache.spark.sql.SparkSession.withActive(SparkSession.scala:866)
-	at org.apache.spark.sql.connect.service.SessionHolder.$anonfun$withSession$1(SessionHolder.scala:962)
-	at org.apache.spark.JobArtifactSet$.withActiveJobArtifactState(JobArtifactSet.scala:97)
-	at org.apache.spark.sql.artifact.ArtifactManager.$anonfun$withResources$1(ArtifactManager.scala:124)
-	at org.apache.spark.sql.artifact.ArtifactManager.withClassLoaderIfNeeded(ArtifactManager.scala:118)
-	at org.apache.spark.sql.artifact.ArtifactManager.withResources(ArtifactManager.scala:123)
-	at org.apache.spark.sql.connect.service.SessionHolder.withSession(SessionHolder.scala:961)
-	at org.apache.spark.sql.connect.execution.ExecuteThreadRunner.executeInternal(ExecuteThreadRunner.scala:348)
-	at org.apache.spark.sql.connect.execution.ExecuteThreadRunner.$anonfun$execute$1(ExecuteThreadRunner.scala:204)
-	at scala.runtime.java8.JFunction0$mcV$sp.apply(JFunction0$mcV$sp.scala:18)
-	at com.databricks.spark.connect.service.UtilizationMetrics.recordActiveQueries(UtilizationMetrics.scala:102)
-	at com.databricks.spark.connect.service.UtilizationMetrics.recordActiveQueries$(UtilizationMetrics.scala:99)
-	at org.apache.spark.sql.connect.execution.ExecuteThreadRunner.recordActiveQueries(ExecuteThreadRunner.scala:63)
-	at org.apache.spark.sql.connect.execution.ExecuteThreadRunner.org$apache$spark$sql$connect$execution$ExecuteThreadRunner$$execute(ExecuteThreadRunner.scala:196)
-	at org.apache.spark.sql.connect.execution.ExecuteThreadRunner$ExecutionThread.$anonfun$run$3(ExecuteThreadRunner.scala:639)
-	at scala.runtime.java8.JFunction0$mcV$sp.apply(JFunction0$mcV$sp.scala:18)
-	at com.databricks.spark.util.DBRTracing$.withSpanFromParent(DBRTracing.scala:70)
-	at org.apache.spark.sql.connect.execution.ExecuteThreadRunner$ExecutionThread.$anonfun$run$2(ExecuteThreadRunner.scala:639)
-	at scala.runtime.java8.JFunction0$mcV$sp.apply(JFunction0$mcV$sp.scala:18)
-	at com.databricks.unity.UCSEphemeralState$Handle.runWith(UCSEphemeralState.scala:51)
-	at com.databricks.unity.HandleImpl.runWith(UCSHandle.scala:130)
-	at com.databricks.unity.HandleImpl.$anonfun$runWithAndClose$1(UCSHandle.scala:139)
-	at scala.util.Using$.resource(Using.scala:296)
-	at com.databricks.unity.HandleImpl.runWithAndClose(UCSHandle.scala:138)
-	at org.apache.spark.sql.connect.execution.ExecuteThreadRunner$ExecutionThread.run(ExecuteThreadRunner.scala:638)
-
-
-
-Exception: Carga concluída com 122 ficheiro(s) em erro. Vê o detalhe acima.
-[Trace ID: 00-397e74155fc48e9d878627818938c2ea-a0bc058e91c58bb9-00]
+ SQLSTATE: 42703
