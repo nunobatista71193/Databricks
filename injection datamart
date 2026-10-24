@@ -141,6 +141,13 @@ if DEDUP_ON_KEY:
 # Gravar
 # ------------------------------------------------------------
 
+# A tabela antiga pode ter propriedades presas a colunas que já não existem
+# (clustering/partição/estatísticas em 'id_policy'), e overwriteSchema herda-as.
+# Apagar e recriar garante uma tabela limpa.
+if spark.catalog.tableExists(core_table):
+    print(f"A apagar tabela existente: {core_table}")
+    spark.sql(f"DROP TABLE IF EXISTS {core_table}")
+
 print(f"A gravar {core_table}...")
 (
     typed.write
