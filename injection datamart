@@ -1,389 +1,125 @@
-# ============================================================
-# CONFIGURAÇÃO
-# ============================================================
-
-import re
-import os
-import csv
-
-import pandas as pd
-
-from pyspark.sql.functions import (
-    current_timestamp,
-    lit,
-    col,
-)
-from pyspark.sql.types import StringType
+from pyspark.sql.functions import col, expr
+from datetime import datetime
 
 catalog_name = "agpt_insurance_dv_catalog"
 schema_name = "wkb_bus_operations_claimsmotor"
-table_name = "raw_datamart"
-
-full_table_name = f"{catalog_name}.{schema_name}.{table_name}"
-
-source_folder = "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/"
-
-FILE_REGEX = r"datamart_(\d{4,6})_([A-Za-z0-9]+)\.csv$"
-
-print(f"Tabela destino: {full_table_name}")
-print(f"Pasta origem: {source_folder}")
-
-# ============================================================
-# FUNÇÕES AUXILIARES
-# ============================================================
-
-def to_local_path(path: str) -> str:
-    """Converte dbfs:/Volumes/... para /Volumes/... (FUSE)."""
-    if path.startswith("dbfs:"):
-        return path[len("dbfs:"):]
-    return path
-
-
-def sanitize_column_name(name: str) -> str:
-    """Remove/substitui caracteres inválidos para nomes de colunas Delta."""
-
-    novo_nome = str(name).strip()
-    novo_nome = re.sub(r"[ ,;{}()\n\t=]", "_", novo_nome)
-
-    substituicoes = {
-        "º": "o",
-        "ª": "a",
-        "%": "pct",
-        "/": "_",
-        "\\": "_",
-        "#": "num",
-        "€": "eur",
-        "$": "usd",
-        "`": "",
-    }
-    for original, substituto in substituicoes.items():
-        novo_nome = novo_nome.replace(original, substituto)
-
-    novo_nome = re.sub(r"_+", "_", novo_nome)
-    novo_nome = novo_nome.strip("_")
-
-    if not novo_nome:
-        novo_nome = "coluna_sem_nome"
-
-    return novo_nome
-
-
-def sanitize_dataframe_columns(spark_df):
-    """Aplica sanitize_column_name e evita nomes duplicados
-    (case-insensitive, como o Delta).
-
-    Usa toDF (renomeia por posição), que não tem problemas com
-    pontos nos nomes das colunas, ao contrário de withColumnRenamed.
-    """
-
-    nomes_originais = spark_df.columns
-    nomes_novos = []
-    contagem = {}
-
-    for nome in nomes_originais:
-        nome_limpo = sanitize_column_name(nome)
-        chave = nome_limpo.lower()
-
-        if chave in contagem:
-            contagem[chave] += 1
-            nome_limpo = f"{nome_limpo}_{contagem[chave]}"
-            # garante que o novo nome também não colide
-            while nome_limpo.lower() in contagem:
-                contagem[chave] += 1
-                nome_limpo = f"{sanitize_column_name(nome)}_{contagem[chave]}"
-            contagem[nome_limpo.lower()] = 0
-        else:
-            contagem[chave] = 0
-
-        nomes_novos.append(nome_limpo)
-
-    return spark_df.toDF(*nomes_novos)
-
-
-def cast_all_columns_to_string(spark_df):
-    """Garante schema raw estável: todas as colunas de negócio em STRING.
-
-    Um único select com backticks: aguenta pontos/hífenes nos nomes
-    e gera um plano muito mais leve que centenas de withColumn.
-    """
-    return spark_df.select(
-        *[col(f"`{c}`").cast(StringType()).alias(c) for c in spark_df.columns]
-    )
-
-
-def detect_delimiter_and_encoding(local_path: str):
-    """Detecta ; ou , e o encoding mais adequado."""
-    encodings = ["utf-8-sig", "latin1", "cp1252", "utf-8"]
-
-    for enc in encodings:
-        try:
-            with open(local_path, "r", encoding=enc, newline="") as f:
-                sample = f.read(8192)
-            if not sample:
-                continue
-
-            try:
-                dialect = csv.Sniffer().sniff(sample, delimiters=";,|\t")
-                print(f"Delimitador detectado: {dialect.delimiter!r} (encoding={enc})")
-                return dialect.delimiter, enc
-            except Exception:
-                if sample.count(";") >= sample.count(","):
-                    print(f"Delimitador assumido: ';' (encoding={enc})")
-                    return ";", enc
-                print(f"Delimitador assumido: ',' (encoding={enc})")
-                return ",", enc
-        except Exception:
-            continue
-
-    print("Delimitador/encoding por omissão: ';' / latin1")
-    return ";", "latin1"
-
-
-def read_csv_spark(volume_path: str, delimiter: str, encoding: str):
-    path = to_local_path(volume_path)
-
-    return (
-        spark.read
-        .format("csv")
-        .option("header", "true")
-        .option("inferSchema", "false")   # CRÍTICO: não inferir INT/DOUBLE
-        .option("delimiter", delimiter)
-        .option("encoding", encoding)
-        .option("multiLine", "true")
-        .option("escape", '"')
-        .option("quote", '"')
-        .option("mode", "PERMISSIVE")
-        .load(path)
-    )
-
-
-def read_csv_pandas(local_path: str, delimiter: str):
-    last_err = None
-    encodings = ["utf-8-sig", "latin1", "cp1252", "utf-8"]
-
-    for enc in encodings:
-        try:
-            pdf = pd.read_csv(
-                local_path,
-                sep=delimiter,
-                encoding=enc,
-                dtype=str,
-                keep_default_na=False
-            )
-            print(f"pandas.read_csv OK (encoding={enc}, sep={delimiter!r})")
-            return pdf
-        except Exception as e:
-            last_err = e
-            print(f"pandas.read_csv falhou encoding={enc}: {e}")
-
-    raise Exception(f"Impossível ler CSV. Último erro: {last_err}")
-
-
-def read_csv_robust(volume_path: str, file_name: str):
-    """Tenta Spark no Volume; se falhar, pandas no caminho FUSE."""
-    local_path = to_local_path(volume_path)
-
-    if not os.path.exists(local_path):
-        raise FileNotFoundError(f"Ficheiro não encontrado: {local_path}")
-
-    size = os.path.getsize(local_path)
-    print(f"Ficheiro: {local_path} ({size:,} bytes)")
-
-    if size == 0:
-        raise ValueError(f"Ficheiro vazio: {file_name}")
-
-    delimiter, encoding = detect_delimiter_and_encoding(local_path)
-
-    try:
-        df = read_csv_spark(volume_path, delimiter, encoding)
-        df.limit(1).count()
-        print(f"Spark CSV OK (sep={delimiter!r}, encoding={encoding})")
-        return df
-    except Exception as e:
-        print(f"Spark CSV falhou: {str(e)[:500]}")
-
-    pdf = read_csv_pandas(local_path, delimiter)
-
-    print(f"Registos pandas: {len(pdf):,}")
-
-    if len(pdf) == 0:
-        raise ValueError(f"CSV sem linhas de dados: {file_name}")
-
-    return spark.createDataFrame(pdf)
-
-
-# ============================================================
-# VALIDAR CATÁLOGO
-# ============================================================
-
-catalog_exists = spark.sql("SHOW CATALOGS").filter(
-    f"catalog = '{catalog_name}'"
-).count()
-
-if catalog_exists == 0:
-    raise Exception(f"Catálogo não encontrado: {catalog_name}")
-
-print(f"OK - Catálogo encontrado: {catalog_name}")
-
-# ============================================================
-# VALIDAR SCHEMA
-# ============================================================
-
-schema_exists = spark.sql(
-    f"SHOW SCHEMAS IN {catalog_name}"
-).filter(
-    f"databaseName = '{schema_name}'"
-).count()
-
-if schema_exists == 0:
-    raise Exception(f"Schema não encontrado: {catalog_name}.{schema_name}")
-
-print(f"OK - Schema encontrado: {schema_name}")
-
-# ============================================================
-# LISTAR FICHEIROS CSV
-# ============================================================
-
-all_files = dbutils.fs.ls(source_folder)
-
-files = [
-    f.path
-    for f in all_files
-    if re.match(FILE_REGEX, f.name, re.IGNORECASE)
-]
-
-print(f"Encontrados {len(files)} ficheiros CSV.")
-for f in sorted(files):
-    print(f"  - {f.split('/')[-1]}")
-
-if len(files) == 0:
-    raise Exception(f"Nenhum ficheiro CSV encontrado em {source_folder}")
-
-# ============================================================
-# APAGAR TABELA DESTINO (reload completo a cada execução)
-# ============================================================
-
-if spark.catalog.tableExists(full_table_name):
-    print(f"A apagar tabela existente: {full_table_name}")
-    spark.sql(f"DROP TABLE IF EXISTS {full_table_name}")
-    print("Tabela apagada.")
-else:
-    print("Tabela ainda não existe. Vai ser criada na ingestão.")
-
-# ============================================================
-# PROCESSAMENTO
-# ============================================================
-
-first_load = True
-total_rows_loaded = 0
-failed_files = []
-
-for file_path in sorted(files):
-
-    file_name = file_path.split("/")[-1]
-
-    print("")
-    print("=" * 60)
-    print(f"Processando: {file_name}")
-    print("=" * 60)
-
-    match = re.match(FILE_REGEX, file_name, re.IGNORECASE)
-    if not match:
-        print(f"Ignorado (nome inválido): {file_name}")
-        continue
-
-    periodo = match.group(1)
-    marca = match.group(2)
-
-    print(f"Período: {periodo}")
-    print(f"Marca: {marca}")
-
-    try:
-        df = read_csv_robust(file_path, file_name)
-        df = sanitize_dataframe_columns(df)
-        df = cast_all_columns_to_string(df)
-
-        row_count = df.count()
-        print(f"Registos Spark: {row_count:,}")
-
-        if row_count == 0:
-            print(f"Ficheiro vazio: {file_name}")
-            continue
-
-        df = (
-            df
-            .withColumn("source_file", lit(file_name))
-            .withColumn("periodo", lit(periodo))
-            .withColumn("marca", lit(marca))
-            .withColumn("load_timestamp", current_timestamp())
-        )
-
-        if first_load:
-            print(f"Criando tabela {full_table_name}")
-            (
-                df.write
-                .format("delta")
-                .mode("overwrite")
-                .option("overwriteSchema", "true")
-                .saveAsTable(full_table_name)
-            )
-            first_load = False
-            print("Tabela criada com sucesso.")
-        else:
-            (
-                df.write
-                .format("delta")
-                .mode("append")
-                .option("mergeSchema", "true")
-                .saveAsTable(full_table_name)
-            )
-            print(f"Append concluído para {file_name}")
-
-        total_rows_loaded += row_count
-
-    except Exception as e:
-        print("")
-        print(f"ERRO NO FICHEIRO: {file_name}")
-        print(str(e)[:1500])   # corta o erro para não rebentar o output
-        print("")
-        failed_files.append((file_name, str(e)[:1500]))
-
-# ============================================================
-# VALIDAÇÃO FINAL
-# ============================================================
-
-print("")
-print("=" * 60)
-print("VALIDAÇÃO FINAL")
-print("=" * 60)
-
-if not spark.catalog.tableExists(full_table_name):
-    raise Exception(
-        f"A tabela {full_table_name} não foi criada. "
-        "Nenhum ficheiro CSV foi lido com sucesso."
-    )
-
-df_final = spark.table(full_table_name)
-
-print(f"Total carregado nesta execução: {total_rows_loaded:,}")
-print(f"Total de registos na tabela: {df_final.count():,}")
-print(f"Ficheiros com erro: {len(failed_files)}")
-
-if failed_files:
-    print("")
-    print("Detalhe dos erros:")
-    for name, err in failed_files:
-        print(f"  - {name}: {err[:300]}")
-
-display(
-    df_final.groupBy("periodo", "marca", "source_file").count()
+table_name = "core_datamart"
+source_table = f"{catalog_name}.{schema_name}.raw_datamart"
+
+ingestion_columns = ["source_file", "período", "marca", "load_timestamp"]
+
+# 1. Amostra de 1000 linhas onde Id_Policy está preenchido
+print("A carregar amostra de 1000 linhas...")
+sample_df = (
+    spark.table(source_table)
+    .filter(col("AC_Policy").isNotNull() & (col("AC_Policy") != ""))
+    .limit(1000)
 )
 
-if failed_files:
-    raise Exception(
-        f"Carga concluída com {len(failed_files)} ficheiro(s) em erro. "
-        "Vê o detalhe acima."
-    )
+sample_rows = [row.asDict() for row in sample_df.collect()]
+print(f"Amostra carregada: {len(sample_rows)} linhas")
 
-print("")
-print("Carga concluída com sucesso.")
+def is_date(value):
+    if value is None or not isinstance(value, str):
+        return False
+    value = str(value).strip()
+    if len(value) < 8:
+        return False
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y", "%Y%m%d"):
+        try:
+            datetime.strptime(value[:10], fmt)
+            return True
+        except:
+            continue
+    return False
+
+def is_numeric(value):
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return True
+    if isinstance(value, str):
+        try:
+            float(str(value).strip().replace(",", "."))
+            return True
+        except:
+            return False
+    return False
+
+def has_decimal(value):
+    if value is None:
+        return False
+    s = str(value)
+    return "." in s or "," in s
+
+def infer_type(col_name, rows):
+    # Força decimal(18,2) em todas as colunas que começam por Amt_
+    if col_name.startswith("Amt_"):
+        return "decimal(18,2)"
+
+    values = [r.get(col_name) for r in rows if r.get(col_name) is not None]
+    if not values:
+        return "string"
+
+    total = len(values)
+    date_count = sum(1 for v in values if is_date(v))
+    numeric_count = sum(1 for v in values if is_numeric(v))
+    decimal_count = sum(1 for v in values if is_numeric(v) and has_decimal(v))
+
+    # Data
+    if total > 0 and date_count / total > 0.85:
+        return "date"
+
+    # Numérico
+    if total > 0 and numeric_count / total > 0.95:
+        if numeric_count > 0 and decimal_count / numeric_count > 0.05:
+            return "decimal(18,2)"
+        else:
+            max_abs = 0
+            for v in values:
+                try:
+                    n = abs(float(str(v).replace(",", ".")))
+                    if n > max_abs:
+                        max_abs = n
+                except:
+                    pass
+            if max_abs < 2_147_483_647:
+                return "int"
+            else:
+                return "bigint"
+
+    # Boolean
+    bool_set = {"true", "false", "1", "0", "s", "n", "sim", "nao", "yes", "no"}
+    bool_count = sum(1 for v in values if str(v).lower().strip() in bool_set)
+    if total > 0 and bool_count / total > 0.95:
+        return "boolean"
+
+    return "string"
+
+# 2. Infere tipos
+print("A inferir tipos...")
+type_map = {}
+for col_name in sample_df.columns:
+    type_map[col_name] = infer_type(col_name, sample_rows)
+
+# 3. Aplica try_cast
+df = spark.table(source_table)
+
+for col_name, spark_type in type_map.items():
+    if col_name in df.columns and spark_type != "string":
+        df = df.withColumn(col_name, expr(f"try_cast(`{col_name}` as {spark_type})"))
+
+# 4. Remove colunas de ingestão
+cols_to_drop = [c for c in ingestion_columns if c in df.columns]
+if cols_to_drop:
+    df = df.drop(*cols_to_drop)
+    print(f"Colunas de ingestão removidas: {cols_to_drop}")
+
+# 5. Escreve a tabela
+df.write \
+  .format("delta") \
+  .mode("overwrite") \
+  .option("overwriteSchema", "true") \
+  .saveAsTable(f"{catalog_name}.{schema_name}.{table_name}")
+
+print(f"Tabela criada com sucesso. Total de colunas: {len(df.columns)}")
