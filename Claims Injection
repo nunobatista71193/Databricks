@@ -1,9 +1,9 @@
 # Databricks notebook source
-# MAGIC %pip install python-calamine
-
-# COMMAND ----------
-
-dbutils.library.restartPython()
+# ANTES de correr este código, numa célula SEPARADA e sozinha, corre:
+#     %pip install python-calamine
+# e noutra célula separada:
+#     dbutils.library.restartPython()
+# Se não instalares, o código usa o openpyxl (muito mais lento).
 
 # COMMAND ----------
 
@@ -19,6 +19,14 @@ import pandas as pd
 
 from pyspark.sql.functions import current_timestamp, lit
 from pyspark.sql.types import StructType, StructField, StringType
+
+try:
+    import python_calamine  # noqa: F401
+    EXCEL_ENGINE = "calamine"
+except ImportError:
+    EXCEL_ENGINE = "openpyxl"
+    print("AVISO: python-calamine não instalado, a usar openpyxl (lento).")
+print(f"Motor Excel: {EXCEL_ENGINE}")
 
 catalog_name = "agpt_insurance_dv_catalog"
 schema_name = "wkb_bus_operations_claimsmotor"
@@ -114,7 +122,7 @@ def find_header_row(local_path, sheet_name, max_scan=30):
     """Primeira linha com >=50% das células preenchidas = cabeçalho."""
     head = pd.read_excel(
         local_path, sheet_name=sheet_name, header=None,
-        nrows=max_scan, dtype=str, engine="calamine",
+        nrows=max_scan, dtype=str, engine=EXCEL_ENGINE,
     )
     minimo = max(2, int(head.shape[1] * 0.5))
     for i, row in head.iterrows():
@@ -154,7 +162,7 @@ def read_excel_robust(volume_path, file_name):
     if kind == "xls_or_encrypted":
         # tenta como xls; se falhar, provavelmente tem password
         try:
-            pd.ExcelFile(local_path, engine="calamine")
+            pd.ExcelFile(local_path, engine=EXCEL_ENGINE)
         except Exception:
             raise Exception(
                 f"{file_name} parece protegido com password ou em formato não suportado."
@@ -170,7 +178,7 @@ def read_excel_robust(volume_path, file_name):
         print("Aviso: ficheiro é texto/CSV com extensão .xlsx, a ler como CSV.")
         pdf = read_text_fallback(local_path)
     else:
-        sheets = pd.ExcelFile(local_path, engine="calamine").sheet_names
+        sheets = pd.ExcelFile(local_path, engine=EXCEL_ENGINE).sheet_names
         print(f"Sheets disponíveis: {sheets}")
 
         if sheet_name not in sheets:
@@ -181,7 +189,7 @@ def read_excel_robust(volume_path, file_name):
 
         pdf = pd.read_excel(
             local_path, sheet_name=sheet_name, header=hdr,
-            dtype=str, engine="calamine",
+            dtype=str, engine=EXCEL_ENGINE,
         )
 
     pdf = pdf.dropna(axis=0, how="all").dropna(axis=1, how="all")
@@ -280,7 +288,7 @@ if DEBUG_PREVIEW:
         print("\nPrimeiros bytes:", fh.read(8), "(xlsx real começa com b'PK\\x03\\x04')")
     try:
         prev = pd.read_excel(p, sheet_name=None, header=None, nrows=6,
-                             dtype=str, engine="calamine")
+                             dtype=str, engine=EXCEL_ENGINE)
         for s, d in prev.items():
             print(f"\nSheet {s}: {d.shape}")
             print(d.iloc[:, :6].to_string())
