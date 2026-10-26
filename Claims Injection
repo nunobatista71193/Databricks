@@ -39,8 +39,6 @@ ONLY_YEARS = []          # ex.: ["2024", "2025"]
 # Mostra o diagnóstico (assinatura do ficheiro + primeiras linhas) antes de carregar
 DEBUG_PREVIEW = True
 
-spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
-
 print(f"Tabela destino: {full_table_name}")
 print(f"Pasta origem:   {source_folder}")
 
