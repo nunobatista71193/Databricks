@@ -1,11 +1,20 @@
+# Databricks notebook source
+# MAGIC %pip install python-calamine
+
+# COMMAND ----------
+
+dbutils.library.restartPython()
+
+# COMMAND ----------
+
 # ============================================================
 # CONFIGURAÇÃO
 # ============================================================
 
 import re
 import os
+import io
 import unicodedata
-import traceback
 import pandas as pd
 
 from pyspark.sql.functions import current_timestamp, lit
@@ -19,10 +28,21 @@ full_table_name = f"{catalog_name}.{schema_name}.{table_name}"
 
 source_folder = "/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/claims/"
 
-CHUNK_SIZE = 50_000
+CHUNK_SIZE = 200_000
+
+# True  = apaga a tabela e recarrega TODOS os ficheiros
+# False = só recarrega os ficheiros indicados em ONLY_YEARS (ou todos, se vazio),
+#         substituindo apenas as linhas desses ficheiros
+FULL_RELOAD = False
+ONLY_YEARS = []          # ex.: ["2024", "2025"]
+
+# Mostra o diagnóstico (assinatura do ficheiro + primeiras linhas) antes de carregar
+DEBUG_PREVIEW = True
+
+spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
 
 print(f"Tabela destino: {full_table_name}")
-print(f"Pasta origem: {source_folder}")
+print(f"Pasta origem:   {source_folder}")
 
 
 # ============================================================
@@ -49,7 +69,6 @@ def sanitize_column_name(name) -> str:
     }.items():
         n = n.replace(original, substituto)
 
-    # qualquer caracter que não seja letra/número/_ passa a "_" (inclui . , ; { } ( ) = / \ espaços, etc.)
     n = re.sub(r"[^0-9A-Za-z_]", "_", n)
     n = re.sub(r"_+", "_", n).strip("_")
 
@@ -78,6 +97,47 @@ def sanitize_pandas_columns(pdf: pd.DataFrame) -> pd.DataFrame:
     return pdf
 
 
+def detect_file_kind(local_path: str) -> str:
+    """Identifica o tipo real do ficheiro pelos primeiros bytes."""
+    with open(local_path, "rb") as f:
+        head = f.read(512)
+
+    if head.startswith(b"PK\x03\x04"):
+        return "xlsx"          # zip (xlsx / xlsm / xlsb)
+    if head.startswith(b"\xd0\xcf\x11\xe0"):
+        return "xls_or_encrypted"   # xls antigo OU xlsx com password
+    low = head.lower()
+    if b"<html" in low or b"<table" in low or b"<?xml" in low:
+        return "html_xml"
+    return "text"              # provavelmente CSV renomeado
+
+
+def find_header_row(local_path, sheet_name, max_scan=30):
+    """Primeira linha com >=50% das células preenchidas = cabeçalho."""
+    head = pd.read_excel(
+        local_path, sheet_name=sheet_name, header=None,
+        nrows=max_scan, dtype=str, engine="calamine",
+    )
+    minimo = max(2, int(head.shape[1] * 0.5))
+    for i, row in head.iterrows():
+        if row.notna().sum() >= minimo:
+            return i
+    return 0
+
+
+def read_text_fallback(local_path):
+    """Ficheiro 'xlsx' que afinal é CSV/TSV: tenta várias codificações."""
+    for enc in ("utf-8-sig", "utf-16", "cp1252", "latin-1"):
+        try:
+            return pd.read_csv(
+                local_path, sep=None, engine="python",
+                dtype=str, encoding=enc,
+            )
+        except Exception:
+            continue
+    raise Exception("Não foi possível ler o ficheiro como texto/CSV.")
+
+
 def read_excel_robust(volume_path, file_name):
     local_path = to_local_path(volume_path)
 
@@ -87,36 +147,67 @@ def read_excel_robust(volume_path, file_name):
     match = re.search(r"(\d{4})", file_name)
     if not match:
         raise Exception(f"Não foi possível identificar o ano em {file_name}")
-
     ano = match.group(1)
     sheet_name = f"CLAIMS_{ano}"
 
-    excel = pd.ExcelFile(local_path)
-    print(f"Sheets disponíveis: {excel.sheet_names}")
+    kind = detect_file_kind(local_path)
+    print(f"Tipo detetado: {kind}")
 
-    if sheet_name not in excel.sheet_names:
+    if kind == "xls_or_encrypted":
+        # tenta como xls; se falhar, provavelmente tem password
+        try:
+            pd.ExcelFile(local_path, engine="calamine")
+        except Exception:
+            raise Exception(
+                f"{file_name} parece protegido com password ou em formato não suportado."
+            )
+
+    if kind in ("html_xml",):
         raise Exception(
-            f"Sheet {sheet_name} não encontrada. Sheets disponíveis: {excel.sheet_names}"
+            f"{file_name} não é um Excel real (HTML/XML renomeado). "
+            "Volta a exportar como .xlsx."
         )
 
-    print(f"A ler sheet: {sheet_name}")
-    pdf = pd.read_excel(excel, sheet_name=sheet_name, dtype=str)
+    if kind == "text":
+        print("Aviso: ficheiro é texto/CSV com extensão .xlsx, a ler como CSV.")
+        pdf = read_text_fallback(local_path)
+    else:
+        sheets = pd.ExcelFile(local_path, engine="calamine").sheet_names
+        print(f"Sheets disponíveis: {sheets}")
 
-    # remover linhas/colunas totalmente vazias (antes de qualquer fillna)
+        if sheet_name not in sheets:
+            raise Exception(f"Sheet {sheet_name} não encontrada. Disponíveis: {sheets}")
+
+        hdr = find_header_row(local_path, sheet_name)
+        print(f"Cabeçalho na linha {hdr}")
+
+        pdf = pd.read_excel(
+            local_path, sheet_name=sheet_name, header=hdr,
+            dtype=str, engine="calamine",
+        )
+
     pdf = pdf.dropna(axis=0, how="all").dropna(axis=1, how="all")
-
-    if len(pdf) == 0:
-        raise Exception(f"Sem registos na sheet {sheet_name}")
+    if pdf.empty:
+        raise Exception(f"Sem registos em {file_name}")
 
     pdf = sanitize_pandas_columns(pdf)
-
-    # vazios -> None (NULL no Delta); tudo o resto fica string
     pdf = pdf.astype(object).where(pdf.notna(), None)
 
-    print(f"Linhas lidas: {len(pdf):,}")
-    print(f"Colunas lidas: {len(pdf.columns)}")
+    print(f"Linhas: {len(pdf):,} | Colunas: {len(pdf.columns)}")
+    print(f"Primeiras colunas: {list(pdf.columns)[:10]}")
+
+    # Sanidade: se só há 1 coluna, algo está errado -> parar cedo
+    if len(pdf.columns) < 2:
+        raise Exception(
+            f"{file_name}: apenas {len(pdf.columns)} coluna lida "
+            f"({list(pdf.columns)}). Ficheiro com formato inesperado."
+        )
 
     return pdf, ano
+
+
+def table_exists() -> bool:
+    return spark.catalog.tableExists(full_table_name)
 
 
 def write_chunk(pdf_chunk, file_name, ano, write_mode):
@@ -171,24 +262,47 @@ files = [
 if not files:
     raise Exception(f"Nenhum ficheiro encontrado em {source_folder}")
 
-print(f"Encontrados {len(files)} ficheiros.")
+if ONLY_YEARS and not FULL_RELOAD:
+    files = [f for f in files if any(y in f.split("/")[-1] for y in ONLY_YEARS)]
+    if not files:
+        raise Exception(f"Nenhum ficheiro corresponde a ONLY_YEARS={ONLY_YEARS}")
+
+print(f"A processar {len(files)} ficheiros:")
 for f in sorted(files):
     print(f" - {f.split('/')[-1]}")
 
 
 # ============================================================
-# LIMPAR TABELA DESTINO
+# DIAGNÓSTICO RÁPIDO (1.º ficheiro)
 # ============================================================
 
-spark.sql(f"DROP TABLE IF EXISTS {full_table_name}")
-print(f"Tabela {full_table_name} removida.")
+if DEBUG_PREVIEW:
+    p = to_local_path(sorted(files)[0])
+    with open(p, "rb") as fh:
+        print("\nPrimeiros bytes:", fh.read(8), "(xlsx real começa com b'PK\\x03\\x04')")
+    try:
+        prev = pd.read_excel(p, sheet_name=None, header=None, nrows=6,
+                             dtype=str, engine="calamine")
+        for s, d in prev.items():
+            print(f"\nSheet {s}: {d.shape}")
+            print(d.iloc[:, :6].to_string())
+    except Exception as e:
+        print(f"Diagnóstico falhou: {e}")
+
+
+# ============================================================
+# LIMPAR TABELA DESTINO (só se recarga total)
+# ============================================================
+
+if FULL_RELOAD:
+    spark.sql(f"DROP TABLE IF EXISTS {full_table_name}")
+    print(f"\nTabela {full_table_name} removida (recarga total).")
 
 
 # ============================================================
 # PROCESSAMENTO
 # ============================================================
 
-first_load = True
 total_rows_loaded = 0
 successful_files = 0
 failed_files = []
@@ -201,14 +315,21 @@ for file_path in sorted(files):
     print("=" * 80)
 
     try:
+        # 1) ler tudo primeiro: se falhar, a tabela não é tocada
         pdf, ano = read_excel_robust(file_path, file_name)
+
+        # 2) em modo incremental, remover só as linhas deste ficheiro
+        if table_exists():
+            spark.sql(
+                f"DELETE FROM {full_table_name} WHERE source_file = '{file_name}'"
+            )
 
         rows_file = 0
         for start in range(0, len(pdf), CHUNK_SIZE):
             chunk = pdf.iloc[start:start + CHUNK_SIZE]
 
-            write_chunk(chunk, file_name, ano, "overwrite" if first_load else "append")
-            first_load = False
+            mode = "append" if table_exists() else "overwrite"
+            write_chunk(chunk, file_name, ano, mode)
 
             rows_file += len(chunk)
             print(f"  bloco {start // CHUNK_SIZE + 1}: {rows_file:,}/{len(pdf):,} linhas")
@@ -218,10 +339,9 @@ for file_path in sorted(files):
         del pdf
 
     except Exception as e:
-        print(f"\nERRO NO FICHEIRO {file_name}")
-        # só a mensagem principal (o stacktrace da JVM é enorme e inútil)
-        print(str(e).split("JVM stacktrace")[0][:2000])
-        failed_files.append((file_name, str(e).split("JVM stacktrace")[0][:2000]))
+        msg = str(e).split("JVM stacktrace")[0][:2000]
+        print(f"\nERRO NO FICHEIRO {file_name}\n{msg}")
+        failed_files.append((file_name, msg))
 
 
 # ============================================================
@@ -231,8 +351,8 @@ for file_path in sorted(files):
 print("\n" + "=" * 80)
 print("VALIDAÇÃO FINAL")
 print("=" * 80)
-print(f"Ficheiros processados com sucesso: {successful_files}")
-print(f"Ficheiros com erro: {len(failed_files)}")
+print(f"Ficheiros com sucesso: {successful_files}")
+print(f"Ficheiros com erro:    {len(failed_files)}")
 
 if failed_files:
     print("\nDETALHE DOS ERROS")
@@ -245,7 +365,7 @@ if successful_files == 0:
 
 df_final = spark.table(full_table_name)
 
-print(f"Total carregado: {total_rows_loaded:,}")
+print(f"Linhas carregadas nesta execução: {total_rows_loaded:,}")
 print(f"Total na tabela: {df_final.count():,}")
 
 display(df_final.groupBy("claim_year", "source_file").count().orderBy("claim_year"))
