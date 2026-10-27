@@ -3,6 +3,7 @@
 # ============================================================
 
 import pyspark.sql.functions as F
+from pyspark.sql.window import Window
 
 catalog_name = "agpt_insurance_dv_catalog"
 schema_name = "wkb_bus_operations_claimsmotor"
@@ -12,14 +13,25 @@ core_table = f"{catalog_name}.{schema_name}.core_datamart"
 
 KEY_COLUMN = "No_Apólice"                                   # chave única
 INGESTION_COLS = ["source_file", "marca", "load_timestamp"]  # não vão para o core
-SAMPLE_ROWS = 200_000        # amostra para inferir tipos (espalhada por todos os ficheiros)
+SAMPLE_ROWS = 200_000        # amostra para inferir tipos
 DEDUP_ON_KEY = False         # True = mantém só 1 linha por chave (a de periodo mais recente)
 
-# Overrides manuais (opcional). Ex.: {"CDPOSTAL124": "string", "Val_Extras": "decimal(18,2)"}
+# Overrides manuais de tipo (opcional)
 FORCE_TYPES = {
     "Val_Exposure": "decimal(38,10)",
-    "Val_Earn_Premium": "decimal(38,10)"
+    "Val_Earn_Premium": "decimal(38,10)",
 }
+
+# Renomeações de colunas no core: {nome_na_raw: nome_no_core}
+RENAMES = {
+    "Ano_Mes_Ocorrencia": "Ac_Period",
+}
+
+
+def out(c: str) -> str:
+    """Nome da coluna no core."""
+    return RENAMES.get(c, c)
+
 
 print(f"Origem:  {raw_table}")
 print(f"Destino: {core_table}")
@@ -34,7 +46,6 @@ drop_cols = [c for c in INGESTION_COLS if c in raw.columns]
 raw = raw.drop(*drop_cols)
 print(f"Colunas de ingestão removidas: {drop_cols}")
 
-# Resolve o nome real da chave (ignora maiúsculas/minúsculas) e falha cedo com mensagem útil
 cols_lower = {c.lower(): c for c in raw.columns}
 if KEY_COLUMN.lower() not in cols_lower:
     raise Exception(
@@ -42,9 +53,16 @@ if KEY_COLUMN.lower() not in cols_lower:
         f"Colunas disponíveis: {raw.columns}"
     )
 key_col = cols_lower[KEY_COLUMN.lower()]
+key_out = out(key_col)
 print(f"Coluna chave: {key_col}")
 
 columns = raw.columns
+
+# Validar renomeações (a coluna existe? o novo nome colide com outra?)
+for old, new in RENAMES.items():
+    if old in columns and new in columns:
+        raise Exception(f"Renomeação {old} -> {new} colide com coluna já existente.")
+print(f"Renomeações aplicadas: { {k: v for k, v in RENAMES.items() if k in columns} }")
 
 # ------------------------------------------------------------
 # Amostra
@@ -83,7 +101,10 @@ stats = sample.agg(*aggs).collect()[0].asDict()
 
 col_types = {}
 for i, c in enumerate(columns):
-    nn, n_int, n_dec, n_dt = stats[f"nn_{i}"] or 0, stats[f"int_{i}"] or 0, stats[f"dec_{i}"] or 0, stats[f"dt_{i}"] or 0
+    nn = stats[f"nn_{i}"] or 0
+    n_int = stats[f"int_{i}"] or 0
+    n_dec = stats[f"dec_{i}"] or 0
+    n_dt = stats[f"dt_{i}"] or 0
     max_len = stats[f"len_{i}"] or 0
 
     if nn == 0:
@@ -123,47 +144,64 @@ def cast_expr(c: str, t: str):
     return F.expr(f"try_cast({q} as {t})")
 
 
-typed = raw.select(*[cast_expr(c, col_types[c]).alias(c) for c in columns])
-
-raw = spark.table(raw_table)
-
-if "Ano_Mes_Ocorrencia" in raw.columns:
-    raw = raw.withColumnRenamed("Ano_Mes_Ocorrencia", "Ac_Period")
+# a renomeação é feita aqui, no alias, para ficar no DataFrame que é gravado
+typed = raw.select(*[cast_expr(c, col_types[c]).alias(out(c)) for c in columns])
 
 # ------------------------------------------------------------
 # Chave única
 # ------------------------------------------------------------
 
 if DEDUP_ON_KEY:
-    from pyspark.sql.window import Window
-    order_col = "periodo" if "periodo" in typed.columns else key_col
-    w = Window.partitionBy(F.col(f"`{key_col}`")).orderBy(F.col(f"`{order_col}`").desc_nulls_last())
+    order_col = "periodo" if "periodo" in typed.columns else key_out
+    w = Window.partitionBy(F.col(f"`{key_out}`")).orderBy(F.col(f"`{order_col}`").desc_nulls_last())
     typed = (
         typed.withColumn("_rn", F.row_number().over(w))
         .filter("_rn = 1")
         .drop("_rn")
     )
-    print(f"Deduplicação ativa: 1 linha por {key_col}")
+    print(f"Deduplicação ativa: 1 linha por {key_out}")
 
 # ------------------------------------------------------------
 # Gravar
 # ------------------------------------------------------------
 
-# A tabela antiga pode ter propriedades presas a colunas que já não existem
-# (clustering/partição/estatísticas em 'id_policy'), e overwriteSchema herda-as.
-# Apagar e recriar garante uma tabela limpa.
+# Apagar a tabela antiga: propriedades antigas (clustering / estatísticas em
+# colunas que já não existem, ex.: id_policy) ficam presas à tabela e
+# overwriteSchema herda-as.
 if spark.catalog.tableExists(core_table):
     print(f"A apagar tabela existente: {core_table}")
     spark.sql(f"DROP TABLE IF EXISTS {core_table}")
+else:
+    print("Tabela destino ainda não existe (nada a apagar).")
+
+if spark.catalog.tableExists(core_table):
+    raise Exception(f"{core_table} continua a existir depois do DROP. Verifica permissões/owner.")
 
 print(f"A gravar {core_table}...")
-(
-    typed.write
-    .format("delta")
-    .mode("overwrite")
-    .option("overwriteSchema", "true")
-    .saveAsTable(core_table)
-)
+try:
+    (
+        typed.write
+        .format("delta")
+        .mode("overwrite")
+        .option("overwriteSchema", "true")
+        .saveAsTable(core_table)
+    )
+except Exception as e:
+    msg = str(e)
+    if "DELTA_COLUMN_NOT_FOUND_IN_SCHEMA" in msg:
+        print("\nERRO: o Delta está a aplicar uma configuração que aponta para uma coluna inexistente.")
+        print("A tabela já foi apagada acima, por isso a origem é provavelmente uma")
+        print("configuração por defeito da sessão/cluster. Diagnóstico:")
+        try:
+            for row in spark.sql("SET").collect():
+                k = str(row[0])
+                if "delta" in k.lower() and ("default" in k.lower() or "propert" in k.lower()):
+                    print(f"  {k} = {row[1]}")
+        except Exception as ex:
+            print(f"  (não foi possível listar a configuração: {str(ex)[:200]})")
+        print("\nPesquisa por 'id_policy' no teu notebook/job (spark.conf.set, TBLPROPERTIES, CLUSTER BY).")
+    raise
+
 print("Tabela gravada.")
 
 # ------------------------------------------------------------
@@ -180,43 +218,50 @@ print(f"Registos raw:  {total_raw:,}")
 print(f"Registos core: {total_core:,}")
 
 # 1) Perda de valores na conversão (valores que não cabem no tipo inferido)
-raw_counts = raw.agg(*[
-    F.sum(F.when(F.trim(F.col(f"`{c}`")) != "", 1).otherwise(0)).alias(c) for c in columns
-]).collect()[0].asDict()
-
-core_counts = core.agg(*[F.count(F.col(f"`{c}`")).alias(c) for c in columns]).collect()[0].asDict()
-
-perdas = [
-    (c, col_types[c], raw_counts[c] or 0, core_counts[c] or 0)
-    for c in columns
-    if (core_counts[c] or 0) < (raw_counts[c] or 0)
-]
-
-if perdas:
-    print("")
-    print(f"ATENÇÃO: {len(perdas)} coluna(s) perderam valores na conversão de tipo:")
-    for c, t, r, k in perdas:
-        print(f"  - {c} ({t}): {r:,} valores na raw -> {k:,} no core (perdidos: {r - k:,})")
-    print("Corrige com FORCE_TYPES (ex.: {'coluna': 'string'}) e volta a correr.")
+if DEDUP_ON_KEY:
+    print("Validação de perdas ignorada (deduplicação ativa altera a contagem).")
 else:
-    print("OK - nenhuma coluna perdeu valores na conversão.")
+    raw_row = raw.agg(*[
+        F.sum(F.when(F.trim(F.col(f"`{c}`")) != "", 1).otherwise(0)).alias(f"r_{i}")
+        for i, c in enumerate(columns)
+    ]).collect()[0].asDict()
+
+    core_row = core.agg(*[
+        F.count(F.col(f"`{out(c)}`")).alias(f"k_{i}")
+        for i, c in enumerate(columns)
+    ]).collect()[0].asDict()
+
+    perdas = []
+    for i, c in enumerate(columns):
+        r, k = raw_row[f"r_{i}"] or 0, core_row[f"k_{i}"] or 0
+        if k < r:
+            perdas.append((c, col_types[c], r, k))
+
+    if perdas:
+        print("")
+        print(f"ATENÇÃO: {len(perdas)} coluna(s) perderam valores na conversão de tipo:")
+        for c, t, r, k in perdas:
+            print(f"  - {c} ({t}): {r:,} valores na raw -> {k:,} no core (perdidos: {r - k:,})")
+        print("Corrige com FORCE_TYPES (ex.: {'coluna': 'string'}) e volta a correr.")
+    else:
+        print("OK - nenhuma coluna perdeu valores na conversão.")
 
 # 2) Unicidade da chave
-kq = f"`{key_col}`"
+kq = f"`{key_out}`"
 n_distinct = core.select(F.countDistinct(F.col(kq))).collect()[0][0]
 n_null_key = core.filter(F.col(kq).isNull()).count()
 print("")
-print(f"Chave {key_col}: {n_distinct:,} distintas em {total_core:,} linhas, {n_null_key:,} nulas")
+print(f"Chave {key_out}: {n_distinct:,} distintas em {total_core:,} linhas, {n_null_key:,} nulas")
 
 if n_distinct + (1 if n_null_key else 0) < total_core:
-    print(f"ATENÇÃO: {key_col} NÃO é única na tabela.")
+    print(f"ATENÇÃO: {key_out} NÃO é única na tabela.")
     display(
         core.groupBy(F.col(kq)).count().filter("count > 1").orderBy(F.desc("count")).limit(20)
     )
     print("Se a mesma apólice aparece em vários períodos, é esperado. "
           "Se queres 1 linha por apólice, põe DEDUP_ON_KEY = True.")
 else:
-    print(f"OK - {key_col} é única.")
+    print(f"OK - {key_out} é única.")
 
 # 3) Schema final
 core.printSchema()
