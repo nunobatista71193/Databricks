@@ -16,7 +16,10 @@ SAMPLE_ROWS = 200_000        # amostra para inferir tipos (espalhada por todos o
 DEDUP_ON_KEY = False         # True = mantém só 1 linha por chave (a de periodo mais recente)
 
 # Overrides manuais (opcional). Ex.: {"CDPOSTAL124": "string", "Val_Extras": "decimal(18,2)"}
-FORCE_TYPES = {}
+FORCE_TYPES = {
+    "Val_Exposure": "decimal(38,10)",
+    "Val_Earn_Premium": "decimal(38,10)"
+}
 
 print(f"Origem:  {raw_table}")
 print(f"Destino: {core_table}")
@@ -121,6 +124,11 @@ def cast_expr(c: str, t: str):
 
 
 typed = raw.select(*[cast_expr(c, col_types[c]).alias(c) for c in columns])
+
+raw = spark.table(raw_table)
+
+if "Ano_Mes_Ocorrencia" in raw.columns:
+    raw = raw.withColumnRenamed("Ano_Mes_Ocorrencia", "Ac_Period")
 
 # ------------------------------------------------------------
 # Chave única
