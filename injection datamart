@@ -1,43 +1,132 @@
+# ============================================================
+# core_datamart (Desc_Company) -> append a dim_brand
+# ============================================================
+
 from pyspark.sql import functions as F
 
 catalog_name = "agpt_insurance_dv_catalog"
 schema_name = "wkb_bus_operations_claimsmotor"
 
-# Marcas existentes no datamart
-df_new = (
-    spark.table(f"{catalog_name}.{schema_name}.core_datamart")
-    .select("brand_details")
-    .distinct()
-    .withColumnRenamed("brand_details", "brand_detail")
-    .withColumn(
-        "dsc_brand_detail_en",
-        F.expr("""
-            CASE
-                WHEN brand_detail = 'OCS' THEN 'Ocidental'
-                WHEN brand_detail = 'Frotas' THEN 'Fleets'
-                WHEN brand_detail = 'Emp' THEN 'Commercial'
-                WHEN brand_detail = 'Particular' THEN 'Private Line'
-                WHEN brand_detail = 'SD' THEN 'Seguro Directo'
-                WHEN brand_detail = 'Non Life' THEN 'Global'
-                WHEN brand_detail = 'CL' THEN 'Commercial Line'
-                ELSE brand_detail
-            END
-        """)
+core_table = f"{catalog_name}.{schema_name}.core_datamart"
+dim_table = f"{catalog_name}.{schema_name}.dim_brand"
+
+SOURCE_COL = "Desc_Company"      # coluna do core de onde vêm os valores distintos
+DIM_KEY_COL = "brand_detail"     # coluna da dim_brand que recebe o valor de Desc_Company
+
+# True = só mostra o que seria acrescentado (não grava). Põe False quando estiver ok.
+DRY_RUN = True
+
+# Colunas da dim cujo valor por defeito é o próprio valor da chave
+# (igual ao "ELSE brand_detail" do código anterior)
+DEFAULT_TO_KEY = ["dsc_brand_detail_en"]
+
+# Regras: se Desc_Company == <valor> então <coluna da dim> = <valor>
+# Podes pôr as colunas que quiseres (ex.: Level 2). Valores não listados ficam
+# com o defeito (a chave, para DEFAULT_TO_KEY; NULL para as restantes).
+#
+# Exemplo (preenche com os teus valores e nomes de colunas reais da dim_brand):
+# RULES = {
+#     "Seguro Direct": {
+#         "dsc_brand_detail_en": "Seguro Directo",
+#         "level_2": "...",
+#     },
+#     "Frotas": {
+#         "level_2": "...",
+#     },
+# }
+RULES = {}
+
+
+# ------------------------------------------------------------
+# Validações de configuração
+# ------------------------------------------------------------
+
+dim = spark.table(dim_table)
+dim_types = {f.name: f.dataType for f in dim.schema.fields}
+print(f"Colunas da dim_brand: {list(dim_types)}")
+
+if DIM_KEY_COL not in dim_types:
+    raise Exception(f"DIM_KEY_COL '{DIM_KEY_COL}' não existe em {dim_table}.")
+
+core_cols = spark.table(core_table).columns
+if SOURCE_COL not in core_cols:
+    raise Exception(f"SOURCE_COL '{SOURCE_COL}' não existe em {core_table}.")
+
+rule_cols = sorted({c for regra in RULES.values() for c in regra})
+em_falta = [c for c in rule_cols if c not in dim_types]
+if em_falta:
+    raise Exception(
+        f"Colunas nas RULES que não existem na dim_brand: {em_falta}. "
+        f"Colunas disponíveis: {list(dim_types)}"
     )
+
+default_cols = [c for c in DEFAULT_TO_KEY if c in dim_types]
+for c in DEFAULT_TO_KEY:
+    if c not in dim_types:
+        print(f"Aviso: {c} (DEFAULT_TO_KEY) não existe na dim_brand, ignorada.")
+
+target_cols = [c for c in dict.fromkeys(default_cols + rule_cols) if c != DIM_KEY_COL]
+
+
+# ------------------------------------------------------------
+# Valores distintos do core
+# ------------------------------------------------------------
+
+df_new = (
+    spark.table(core_table)
+    .select(F.trim(F.col(f"`{SOURCE_COL}`")).alias(DIM_KEY_COL))
+    .where(F.col(f"`{DIM_KEY_COL}`").isNotNull() & (F.col(f"`{DIM_KEY_COL}`") != ""))
+    .distinct()
 )
 
-# Dimensão atual
-df_dim = spark.table(f"{catalog_name}.{schema_name}.dim_brand")
 
-# Apenas marcas que ainda não existem
+def sql_str(v) -> str:
+    return "'" + str(v).replace("'", "''") + "'"
+
+
+def rule_expr(col_name: str):
+    whens = [
+        f"WHEN `{DIM_KEY_COL}` = {sql_str(chave)} THEN {sql_str(regra[col_name])}"
+        for chave, regra in RULES.items()
+        if col_name in regra
+    ]
+    default = f"`{DIM_KEY_COL}`" if col_name in default_cols else "NULL"
+    if not whens:
+        return F.expr(default)
+    return F.expr("CASE " + " ".join(whens) + f" ELSE {default} END")
+
+
+for c in target_cols:
+    df_new = df_new.withColumn(c, rule_expr(c))
+
+# ------------------------------------------------------------
+# Só os que ainda não existem na dim
+# ------------------------------------------------------------
+
 df_append = df_new.join(
-    df_dim.select("brand_detail"),
-    on="brand_detail",
-    how="left_anti"
+    dim.select(F.col(f"`{DIM_KEY_COL}`")),
+    on=DIM_KEY_COL,
+    how="left_anti",
 )
 
-# Append
-df_append.write \
-    .format("delta") \
-    .mode("append") \
-    .saveAsTable(f"{catalog_name}.{schema_name}.dim_brand")
+# Só colunas calculadas aqui (as restantes da dim ficam NULL/default), com o tipo da dim
+df_append = df_append.select(
+    *[F.col(f"`{c}`").cast(dim_types[c]).alias(c) for c in [DIM_KEY_COL] + target_cols]
+)
+
+n_new = df_append.count()
+print(f"\nNovos registos a acrescentar: {n_new:,}")
+display(df_append.orderBy(DIM_KEY_COL))
+
+if n_new == 0:
+    print("Nada a acrescentar.")
+elif DRY_RUN:
+    print("DRY_RUN ativo: nada foi gravado. Põe DRY_RUN = False para acrescentar.")
+else:
+    (
+        df_append.write
+        .format("delta")
+        .mode("append")
+        .saveAsTable(dim_table)
+    )
+    print(f"Acrescentados {n_new:,} registos a {dim_table}.")
