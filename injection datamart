@@ -45,13 +45,33 @@ dim = spark.table(dim_table)
 dim_types = {f.name: f.dataType for f in dim.schema.fields}
 print(f"Colunas da dim_brand: {list(dim_types)}")
 
-if DIM_KEY_COL not in dim_types:
-    raise Exception(f"DIM_KEY_COL '{DIM_KEY_COL}' não existe em {dim_table}.")
+# Resolve nomes sem distinguir maiúsculas/minúsculas (o Spark também não distingue)
+dim_lower = {n.lower(): n for n in dim_types}
+
+
+def resolve(name):
+    return dim_lower.get(str(name).lower())
+
+
+key_real = resolve(DIM_KEY_COL)
+if key_real is None:
+    raise Exception(
+        f"DIM_KEY_COL '{DIM_KEY_COL}' não existe em {dim_table}. "
+        f"Colunas disponíveis: {list(dim_types)}"
+    )
+DIM_KEY_COL = key_real
 
 core_cols = spark.table(core_table).columns
-if SOURCE_COL not in core_cols:
-    raise Exception(f"SOURCE_COL '{SOURCE_COL}' não existe em {core_table}.")
+if SOURCE_COL.lower() not in [c.lower() for c in core_cols]:
+    raise Exception(
+        f"SOURCE_COL '{SOURCE_COL}' não existe em {core_table}. "
+        f"Colunas disponíveis: {core_cols}"
+    )
 
+RULES = {
+    chave: {(resolve(c) or c): v for c, v in regra.items()}
+    for chave, regra in RULES.items()
+}
 rule_cols = sorted({c for regra in RULES.values() for c in regra})
 em_falta = [c for c in rule_cols if c not in dim_types]
 if em_falta:
@@ -60,9 +80,9 @@ if em_falta:
         f"Colunas disponíveis: {list(dim_types)}"
     )
 
-default_cols = [c for c in DEFAULT_TO_KEY if c in dim_types]
+default_cols = [resolve(c) for c in DEFAULT_TO_KEY if resolve(c)]
 for c in DEFAULT_TO_KEY:
-    if c not in dim_types:
+    if not resolve(c):
         print(f"Aviso: {c} (DEFAULT_TO_KEY) não existe na dim_brand, ignorada.")
 
 target_cols = [c for c in dict.fromkeys(default_cols + rule_cols) if c != DIM_KEY_COL]
