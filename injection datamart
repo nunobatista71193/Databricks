@@ -27,6 +27,9 @@ RENAMES = {
     "Ano_Mes_Ocorrencia": "Ac_Period",
 }
 
+# Nome da chave no core (a coluna de origem é KEY_COLUMN)
+KEY_NEW_NAME = "Id_Policy"
+
 
 def out(c: str) -> str:
     """Nome da coluna no core."""
@@ -53,6 +56,7 @@ if KEY_COLUMN.lower() not in cols_lower:
         f"Colunas disponíveis: {raw.columns}"
     )
 key_col = cols_lower[KEY_COLUMN.lower()]
+RENAMES[key_col] = KEY_NEW_NAME     # usa o nome real da coluna na raw (evita problemas de acentos)
 key_out = out(key_col)
 print(f"Coluna chave: {key_col}")
 
@@ -263,7 +267,24 @@ if n_distinct + (1 if n_null_key else 0) < total_core:
 else:
     print(f"OK - {key_out} é única.")
 
-# 3) Schema final
+# 3) Contagem de Id_Policy por Ac_Period
+period_col = out("Ano_Mes_Ocorrencia")
+if period_col in core.columns:
+    print("")
+    print(f"{key_out} por {period_col}:")
+    por_periodo = (
+        core.groupBy(F.col(f"`{period_col}`"))
+        .agg(
+            F.count("*").alias("linhas"),
+            F.countDistinct(F.col(kq)).alias(f"{key_out}_distintas"),
+        )
+        .orderBy(F.col(f"`{period_col}`"))
+    )
+    display(por_periodo)
+else:
+    print(f"Coluna {period_col} não existe no core, contagem por período ignorada.")
+
+# 4) Schema final
 core.printSchema()
 print("")
 print("Concluído.")
