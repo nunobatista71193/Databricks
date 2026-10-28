@@ -3,6 +3,7 @@
 # ============================================================
 
 from pyspark.sql import functions as F
+from pyspark.sql.window import Window
 
 catalog_name = "agpt_insurance_dv_catalog"
 schema_name = "wkb_bus_operations_claimsmotor"
@@ -15,6 +16,9 @@ DIM_KEY_COL = "brand_details"    # coluna da dim_brand que recebe o valor de Des
 
 # True = só mostra o que seria acrescentado (não grava). Põe False quando estiver ok.
 DRY_RUN = True
+
+# Id sequencial: continua a partir do maior valor atual da dim (None = não gerar)
+ID_COL = "id_brand_detail"
 
 # Colunas da dim cujo valor por defeito é o próprio valor da chave
 # (igual ao "ELSE brand_detail" do código anterior)
@@ -130,9 +134,23 @@ df_append = df_new.join(
     how="left_anti",
 )
 
+# Id sequencial: maior id atual + 1, +2, ... (ordenado pela chave, para ser estável)
+id_real = resolve(ID_COL) if ID_COL else None
+if ID_COL and id_real is None:
+    raise Exception(f"ID_COL '{ID_COL}' não existe em {dim_table}. Colunas: {list(dim_types)}")
+
+out_cols = [DIM_KEY_COL] + [c for c in target_cols if c != id_real]
+
+if id_real:
+    max_id = dim.agg(F.max(F.col(f"`{id_real}`"))).collect()[0][0] or 0
+    print(f"Maior {id_real} atual na dim: {max_id}")
+    w = Window.orderBy(F.col(f"`{DIM_KEY_COL}`"))
+    df_append = df_append.withColumn(id_real, F.row_number().over(w) + F.lit(max_id))
+    out_cols = [id_real] + out_cols
+
 # Só colunas calculadas aqui (as restantes da dim ficam NULL/default), com o tipo da dim
 df_append = df_append.select(
-    *[F.col(f"`{c}`").cast(dim_types[c]).alias(c) for c in [DIM_KEY_COL] + target_cols]
+    *[F.col(f"`{c}`").cast(dim_types[c]).alias(c) for c in out_cols]
 )
 
 n_new = df_append.count()
