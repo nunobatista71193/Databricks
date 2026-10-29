@@ -1,5 +1,7 @@
 {
   "$schema": "https://vega.github.io/schema/vega/v5.json",
+  "width": 300,
+  "height": 300,
   "autosize": { "type": "fit", "contains": "padding" },
   "padding": 10,
   "signals": [
@@ -84,7 +86,6 @@
           "path": {
             "signal": "'M' + datum.x0 + ',' + datum.y0 + 'L' + datum.x1 + ',' + datum.y1 + 'L' + datum.x2 + ',' + datum.y1"
           },
-          "fill": { "value": null },
           "stroke": { "value": "#555555" },
           "strokeWidth": { "value": 1 }
         }
