@@ -1,11 +1,11 @@
 {
   "$schema": "https://vega.github.io/schema/vega/v5.json",
-  "width": 300,
-  "height": 300,
+  "width": 250,
+  "height": 250,
   "autosize": { "type": "fit", "contains": "padding" },
   "padding": 10,
   "signals": [
-    { "name": "titulo", "value": "2024" },
+    { "name": "titulo", "value": "2026" },
     { "name": "cx", "update": "width / 2" },
     { "name": "cy", "update": "height / 2" },
     { "name": "R", "update": "min(width, height) * 0.34" },
@@ -18,7 +18,7 @@
       "name": "fatias",
       "source": "dataset",
       "transform": [
-        { "type": "formula", "as": "val", "expr": "toNumber(datum['indicador'])" },
+        { "type": "formula", "as": "val", "expr": "toNumber(datum['Indicators'])" },
         { "type": "filter", "expr": "datum.val > 0" },
         {
           "type": "aggregate",
@@ -74,7 +74,7 @@
           "fill": { "scale": "cor", "field": "dsc_brand" },
           "stroke": { "value": "#333333" },
           "strokeWidth": { "value": 0.6 },
-          "tooltip": { "signal": "{'Marca': datum.dsc_brand, 'Indicador': format(datum.v, ',.0f')}" }
+          "tooltip": { "signal": "{'Marca': datum.dsc_brand, 'Indicators': format(datum.v, ',.0f')}" }
         }
       }
     },
