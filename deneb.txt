@@ -3,14 +3,15 @@
   "width": 250,
   "height": 250,
   "autosize": { "type": "fit", "contains": "padding" },
-  "padding": 10,
+  "padding": { "left": 10, "right": 10, "top": 10, "bottom": 10 },
   "signals": [
     { "name": "titulo", "value": "2026" },
+    { "name": "fmt", "value": ",.0f" },
     { "name": "cx", "update": "width / 2" },
     { "name": "cy", "update": "height / 2" },
-    { "name": "R", "update": "min(width, height) * 0.34" },
-    { "name": "R2", "update": "R * 1.14" },
-    { "name": "arm", "update": "R * 0.28" }
+    { "name": "R", "update": "min(width, height) * 0.30" },
+    { "name": "R2", "update": "R * 1.15" },
+    { "name": "arm", "update": "R * 0.22" }
   ],
   "data": [
     { "name": "dataset" },
@@ -28,13 +29,16 @@
           "as": ["v"]
         },
         { "type": "collect", "sort": { "field": "v", "order": "descending" } },
+        { "type": "joinaggregate", "fields": ["v"], "ops": ["sum"], "as": ["total"] },
         {
-          "type": "pie",
-          "field": "v",
-          "startAngle": 0,
-          "endAngle": 6.283185307179586,
-          "sort": false
+          "type": "window",
+          "ops": ["sum"],
+          "fields": ["v"],
+          "as": ["cum"],
+          "frame": [null, 0]
         },
+        { "type": "formula", "as": "startAngle", "expr": "(datum.cum - datum.v) / datum.total * 2 * PI" },
+        { "type": "formula", "as": "endAngle", "expr": "datum.cum / datum.total * 2 * PI" },
         { "type": "formula", "as": "a", "expr": "(datum.startAngle + datum.endAngle) / 2" },
         { "type": "formula", "as": "dir", "expr": "sin(datum.a) >= 0 ? 1 : -1" },
         { "type": "formula", "as": "x0", "expr": "cx + R * sin(datum.a)" },
@@ -74,7 +78,7 @@
           "fill": { "scale": "cor", "field": "dsc_brand" },
           "stroke": { "value": "#333333" },
           "strokeWidth": { "value": 0.6 },
-          "tooltip": { "signal": "{'Marca': datum.dsc_brand, 'Indicators': format(datum.v, ',.0f')}" }
+          "tooltip": { "signal": "{'Marca': datum.dsc_brand, 'Indicators': format(datum.v, fmt)}" }
         }
       }
     },
@@ -96,11 +100,11 @@
       "from": { "data": "fatias" },
       "encode": {
         "update": {
-          "x": { "field": "x2" },
-          "y": { "signal": "datum.y1 - 4" },
-          "text": { "signal": "format(datum.v, ',.0f')" },
-          "align": { "signal": "datum.dir > 0 ? 'right' : 'left'" },
-          "baseline": { "value": "bottom" },
+          "x": { "signal": "datum.x2 + datum.dir * 4" },
+          "y": { "field": "y1" },
+          "text": { "signal": "format(datum.v, fmt)" },
+          "align": { "signal": "datum.dir > 0 ? 'left' : 'right'" },
+          "baseline": { "value": "middle" },
           "fontSize": { "signal": "min(width, height) * 0.075" },
           "fontWeight": { "value": 300 },
           "fill": { "scale": "corTxt", "field": "dsc_brand" }
