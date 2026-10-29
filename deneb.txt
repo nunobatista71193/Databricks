@@ -9,9 +9,10 @@
     { "name": "fmt", "value": ",.0f" },
     { "name": "cx", "update": "width / 2" },
     { "name": "cy", "update": "height / 2" },
-    { "name": "R", "update": "min(width * 0.26, height * 0.30)" },
-    { "name": "vlen", "update": "R * 1.45" },
-    { "name": "arm", "update": "R * 0.30" }
+    { "name": "R", "update": "min(width * 0.20, height * 0.30)" },
+    { "name": "Rin", "update": "R * 0.55" },
+    { "name": "Rl", "update": "R * 1.2" },
+    { "name": "fs", "update": "min(width, height) * 0.06" }
   ],
   "data": [
     { "name": "dataset" },
@@ -29,7 +30,7 @@
           "as": ["v"]
         },
         { "type": "collect", "sort": { "field": "v", "order": "descending" } },
-        { "type": "joinaggregate", "fields": ["v"], "ops": ["sum"], "as": ["total"] },
+        { "type": "joinaggregate", "fields": ["v", "v"], "ops": ["sum", "max"], "as": ["total", "vmax"] },
         {
           "type": "window",
           "ops": ["sum"],
@@ -41,10 +42,25 @@
         { "type": "formula", "as": "endAngle", "expr": "datum.cum / datum.total * 2 * PI" },
         { "type": "formula", "as": "a", "expr": "(datum.startAngle + datum.endAngle) / 2" },
         { "type": "formula", "as": "dir", "expr": "sin(datum.a) >= 0 ? 1 : -1" },
-        { "type": "formula", "as": "x0", "expr": "cx + R * sin(datum.a)" },
-        { "type": "formula", "as": "y0", "expr": "cy - R * cos(datum.a)" },
-        { "type": "formula", "as": "y1", "expr": "cos(datum.a) >= 0 ? cy - vlen : cy + vlen" },
-        { "type": "formula", "as": "x2", "expr": "datum.x0 + datum.dir * arm" }
+        { "type": "formula", "as": "ro", "expr": "Rin + (R - Rin) * (0.3 + 0.7 * datum.v / datum.vmax)" },
+        { "type": "formula", "as": "x0", "expr": "cx + datum.ro * sin(datum.a)" },
+        { "type": "formula", "as": "y0", "expr": "cy - datum.ro * cos(datum.a)" },
+        { "type": "formula", "as": "xe", "expr": "cx + Rl * sin(datum.a)" },
+        { "type": "formula", "as": "ye", "expr": "cy - Rl * cos(datum.a)" },
+        {
+          "type": "window",
+          "groupby": ["dir"],
+          "sort": { "field": "ye", "order": "ascending" },
+          "ops": ["row_number"],
+          "as": ["rn"]
+        },
+        { "type": "joinaggregate", "groupby": ["dir"], "fields": ["v"], "ops": ["count"], "as": ["n"] },
+        {
+          "type": "formula",
+          "as": "yl",
+          "expr": "datum.n == 1 ? datum.ye : cy - Rl + (datum.rn - 0.5) / datum.n * 2 * Rl"
+        },
+        { "type": "formula", "as": "xl", "expr": "cx + datum.dir * R * 1.45" }
       ]
     }
   ],
@@ -72,8 +88,8 @@
           "y": { "signal": "cy" },
           "startAngle": { "field": "startAngle" },
           "endAngle": { "field": "endAngle" },
-          "innerRadius": { "signal": "R * 0.62" },
-          "outerRadius": { "signal": "R" },
+          "innerRadius": { "signal": "Rin" },
+          "outerRadius": { "field": "ro" },
           "fill": { "scale": "cor", "field": "dsc_brand" },
           "stroke": { "value": "#333333" },
           "strokeWidth": { "value": 0.6 },
@@ -87,7 +103,7 @@
       "encode": {
         "update": {
           "path": {
-            "signal": "'M' + datum.x0 + ',' + datum.y0 + 'L' + datum.x0 + ',' + datum.y1 + 'L' + datum.x2 + ',' + datum.y1"
+            "signal": "'M' + datum.x0 + ',' + datum.y0 + 'L' + datum.xe + ',' + datum.ye + 'L' + datum.xl + ',' + datum.yl"
           },
           "stroke": { "value": "#555555" },
           "strokeWidth": { "value": 1 }
@@ -99,12 +115,12 @@
       "from": { "data": "fatias" },
       "encode": {
         "update": {
-          "x": { "signal": "datum.x2 + datum.dir * 5" },
-          "y": { "field": "y1" },
+          "x": { "signal": "datum.xl + datum.dir * 5" },
+          "y": { "field": "yl" },
           "text": { "signal": "format(datum.v, fmt)" },
           "align": { "signal": "datum.dir > 0 ? 'left' : 'right'" },
           "baseline": { "value": "middle" },
-          "fontSize": { "signal": "min(width, height) * 0.07" },
+          "fontSize": { "signal": "fs" },
           "fontWeight": { "value": 300 },
           "fill": { "scale": "corTxt", "field": "dsc_brand" }
         }
@@ -119,7 +135,7 @@
           "text": { "signal": "titulo" },
           "align": { "value": "center" },
           "baseline": { "value": "middle" },
-          "fontSize": { "signal": "R * 0.42" },
+          "fontSize": { "signal": "Rin * 0.5" },
           "fontWeight": { "value": 300 },
           "fill": { "value": "#000000" }
         }
