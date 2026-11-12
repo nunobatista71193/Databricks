@@ -16,37 +16,38 @@ internamente e não aparece como coluna.
 
 LR sem IBNR = LR total - LR IBNR
 
-Os efeitos de prémio, custo e frequência são calculados sequencialmente
-sobre o LR sem IBNR do período de referência:
+Os efeitos de prémio e de burning cost são calculados, cada um, sobre o
+LR sem IBNR do período de referência (LR25 = LR_sem_IBNR_ref):
 
-    LR_a = LR_sem_IBNR_ref * Prémio_ref / Prémio_CY
+    Variação prémio médio = Prémio_CY / Prémio_ref - 1
+    LR_a = LR25 / (1 + Variação prémio médio)
     Efeito prémio = LR_a - LR_sem_IBNR_ref
 
-    LR_b = LR_a * Custo_CY / Custo_ref
-    Efeito custo = LR_b - LR_a
+    Burning cost = Frequência x Custo médio
+    LR_a = LR25 x (1 + Variação frequência) x (1 + Variação custo médio)
+    Efeito burning cost = LR_a - LR_sem_IBNR_ref
 
-    LR_c = LR_b * Frequência_CY / Frequência_ref
-    Efeito frequência = LR_c - LR_b
+(o burning cost substitui os efeitos de custo médio e de frequência)
 
 O efeito IBNR é um delta direto, sem aplicar os fatores da ponte:
 
     Efeito IBNR = LR_IBNR_CY - LR_IBNR_ref
 
-"Outros" é o residual do LR sem IBNR:
+"Outros" é o residual do LR sem IBNR (inclui a interação entre prémio
+e burning cost, já que cada efeito parte do LR de referência):
 
-    Efeito outros = LR_sem_IBNR_CY - LR_c
+    Efeito outros = (LR_sem_IBNR_CY - LR_sem_IBNR_ref)
+                    - Efeito prémio - Efeito burning cost
 
 Logo, a reconciliação é:
 
     Efeito prémio
-    + Efeito custo
-    + Efeito frequência
+    + Efeito burning cost
     + Efeito IBNR
     + Efeito outros
     = variação do LR total
 
 Os efeitos são multiplicados por LR_TO_PP para serem expressos em pp.
-A substituição é sequencial na ordem: prémio, custo e frequência.
 """
 
 from pyspark.sql import functions as F
@@ -178,24 +179,29 @@ def build_bridge(raw, comparison):
         & (F.col("fr0") != 0)
     )
 
-    # Substituição sequencial:
-    # LR_a = LR sem IBNR ref * prémio ref / prémio CY.
-    # LR_b = LR_a * custo CY / custo ref.
-    # LR_c = LR_b * frequência CY / frequência ref.
-    lr_a = F.when(
+    # Variações face à referência.
+    var_premio = F.col("pm1") / F.col("pm0") - 1
+    var_freq = F.col("fr1") / F.col("fr0") - 1
+    var_custo = F.col("cm1") / F.col("cm0") - 1
+
+    # Efeito prémio: LR_a = LR25 / (1 + variação prémio médio).
+    lr_a_premio = F.when(valid_factors, lr_ex_ibnr0 / (1 + var_premio))
+    # Efeito burning cost: LR_a = LR25 x (1 + variação frequência) x (1 + variação custo médio).
+    lr_a_burning = F.when(
         valid_factors,
-        lr_ex_ibnr0 * F.col("pm0") / F.col("pm1"),
+        lr_ex_ibnr0 * (1 + var_freq) * (1 + var_custo),
     )
-    lr_b = lr_a * F.col("cm1") / F.col("cm0")
-    lr_c = lr_b * F.col("fr1") / F.col("fr0")
 
     scale = F.lit(float(LR_TO_PP))
 
     # Delta direto do IBNR, sem aplicação de fatores.
     efeito_ibnr = (F.col("ibnr1") - F.col("ibnr0")) * scale
 
+    efeito_premio = (lr_a_premio - lr_ex_ibnr0) * scale
+    efeito_burning = (lr_a_burning - lr_ex_ibnr0) * scale
+
     # Residual necessário para reconciliar o LR sem IBNR.
-    efeito_outros = (lr_ex_ibnr1 - lr_c) * scale
+    efeito_outros = (lr_ex_ibnr1 - lr_ex_ibnr0) * scale - efeito_premio - efeito_burning
 
     # LR de referência e CY, contribuições da ponte e fatores usados.
     return joined.select(
@@ -205,15 +211,8 @@ def build_bridge(raw, comparison):
         (F.col("lr_total0") * scale).alias("LR LY (pp)" if comparison == "PY" else "LR Budget (pp)"),
         (F.col("lr_total1") * scale).alias("LR CY (pp)"),
 
-        ((lr_a - lr_ex_ibnr0) * scale).alias(
-            "Efeito prémio médio (pp)"
-        ),
-        ((lr_b - lr_a) * scale).alias(
-            "Efeito custo médio (pp)"
-        ),
-        ((lr_c - lr_b) * scale).alias(
-            "Efeito frequência (pp)"
-        ),
+        efeito_premio.alias("Efeito prémio médio (pp)"),
+        efeito_burning.alias("Efeito burning cost (pp)"),
         efeito_ibnr.alias("Efeito IBNR (pp)"),
         efeito_outros.alias("Efeito outros (pp)"),
 
