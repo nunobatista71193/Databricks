@@ -48,6 +48,8 @@ Os efeitos são multiplicados por LR_TO_PP para serem expressos em pp.
 A substituição é sequencial na ordem: prémio, custo e frequência.
 """
 
+from pyspark.sql import functions as F
+
 # ═══════════════════════════════════════════════════════════════════════════
 # CONFIGURAÇÃO
 # ═══════════════════════════════════════════════════════════════════════════
@@ -81,8 +83,6 @@ def build_bridge(raw, comparison):
         "PY"     -> ano imediatamente anterior vs CY
         "BUDGET" -> Budget do mesmo ano vs CY
     """
-    from pyspark.sql import functions as F
-
     if comparison not in ("PY", "BUDGET"):
         raise ValueError("comparison tem de ser 'PY' ou 'BUDGET'.")
 
