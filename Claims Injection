@@ -47,6 +47,11 @@ Logo, a reconciliação é:
     + Efeito outros
     = variação do LR total
 
+Diagnóstico: k = LR sem IBNR / (Frequência x Custo médio / Prémio médio),
+nas colunas "k LY" / "k Budget" e "k CY". Se k for parecido nos dois
+períodos, "Outros" fica perto de zero; se mudar, a diferença vem da
+composição do LR ou de diferenças de base entre o LR e os fatores.
+
 Os efeitos são multiplicados por LR_TO_PP para serem expressos em pp.
 """
 
@@ -192,6 +197,18 @@ def build_bridge(raw, comparison):
         lr_ex_ibnr0 * (1 + var_freq) * (1 + var_custo),
     )
 
+    # Diagnóstico do "Outros": k = LR sem IBNR / (Frequência x Custo médio / Prémio médio).
+    # Se k for parecido na referência e no CY, "Outros" fica perto de zero.
+    def k_factor(lr_ex, fr, cm, pm):
+        model = fr * cm / pm
+        return F.when(
+            fr.isNotNull() & cm.isNotNull() & pm.isNotNull() & (pm != 0) & (model != 0),
+            lr_ex / model,
+        )
+
+    k_ref = k_factor(lr_ex_ibnr0, F.col("fr0"), F.col("cm0"), F.col("pm0"))
+    k_cy = k_factor(lr_ex_ibnr1, F.col("fr1"), F.col("cm1"), F.col("pm1"))
+
     scale = F.lit(float(LR_TO_PP))
 
     # Delta direto do IBNR, sem aplicação de fatores.
@@ -222,6 +239,9 @@ def build_bridge(raw, comparison):
         F.col("cm1").alias("Custo médio CY"),
         F.col("fr0").alias(f"Frequência {comparison_label}"),
         F.col("fr1").alias("Frequência CY"),
+
+        k_ref.alias("k LY" if comparison == "PY" else "k Budget"),
+        k_cy.alias("k CY"),
     )
 
 
