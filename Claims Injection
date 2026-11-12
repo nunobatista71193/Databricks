@@ -4,14 +4,15 @@ PONTE DO LOSS RATIO — wrk_lr_bridge e wrk_lr_bridge_myb
 
 - wrk_lr_bridge: ponte PY (ano anterior) vs CY.
   Se já existir com o esquema atual, não é alterada.
-  Se tiver o esquema antigo, é reconstruída sem as colunas de LR.
+  Se tiver um esquema diferente, é reconstruída.
 - wrk_lr_bridge_myb: ponte Budget vs CY.
   É reconstruída em cada execução.
 
 METODOLOGIA DOS CÁLCULOS
 ------------------------
-O LR total e o LR IBNR são utilizados internamente, mas não são
-apresentados como colunas na tabela de saída.
+O LR total do período de referência e do CY aparece nas colunas
+"LR PY (pp)" / "LR Budget (pp)" e "LR CY (pp)". O LR IBNR é usado
+internamente e não aparece como coluna.
 
 LR sem IBNR = LR total - LR IBNR
 
@@ -196,11 +197,13 @@ def build_bridge(raw, comparison):
     # Residual necessário para reconciliar o LR sem IBNR.
     efeito_outros = (lr_ex_ibnr1 - lr_c) * scale
 
-    # Só são apresentadas as contribuições da ponte e os fatores usados.
-    # Os valores de LR intermédios não são incluídos na tabela.
+    # LR de referência e CY, contribuições da ponte e fatores usados.
     return joined.select(
         "suk_month",
         "brand_details",
+
+        (F.col("lr_total0") * scale).alias(f"LR {comparison_label} (pp)"),
+        (F.col("lr_total1") * scale).alias("LR CY (pp)"),
 
         ((lr_a - lr_ex_ibnr0) * scale).alias(
             "Efeito prémio médio (pp)"
