@@ -12,7 +12,7 @@ METODOLOGIA DOS CÁLCULOS
 ------------------------
 O LR total do período de referência e do CY aparece nas colunas
 "LR LY (pp)" / "LR Budget (pp)" e "LR CY (pp)". O LR IBNR é usado
-internamente e não aparece como coluna.
+também aparece nas colunas "LR IBNR LY (pp)" / "LR IBNR Budget (pp)" e "LR IBNR CY (pp)", por marca.
 
 LR sem IBNR = LR total - LR IBNR
 
@@ -227,6 +227,10 @@ def build_bridge(raw, comparison):
 
         (F.col("lr_total0") * scale).alias("LR LY (pp)" if comparison == "PY" else "LR Budget (pp)"),
         (F.col("lr_total1") * scale).alias("LR CY (pp)"),
+        (F.col("ibnr0") * scale).alias(
+            "LR IBNR LY (pp)" if comparison == "PY" else "LR IBNR Budget (pp)"
+        ),
+        (F.col("ibnr1") * scale).alias("LR IBNR CY (pp)"),
 
         efeito_premio.alias("Efeito prémio médio (pp)"),
         efeito_burning.alias("Efeito burning cost (pp)"),
