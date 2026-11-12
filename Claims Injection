@@ -18,6 +18,8 @@ O LR total do período de referência e do CY aparece nas colunas
 como informação, em "LR IBNR LY (pp)" / "LR IBNR Budget (pp)" e
 "LR IBNR CY (pp)", e não entra nos cálculos.
 
+O custo médio usado é "Average Cost (€) f/f" (inclui o IBNR).
+
 O prémio médio é por exposição, como a frequência:
     exposição = nº sinistros / frequência
     Prémio médio = Earned Premiums YTD / exposição
@@ -131,7 +133,7 @@ def build_bridge(raw, comparison):
         col("Gross LR IBNR").cast("double").alias("ibnr"),
 
         col("Frequency of Total YTD").cast("double").alias("fr"),
-        col("Average Cost (€) of Total YTD").cast("double").alias("cm"),
+        col("Average Cost (€) f/f").cast("double").alias("cm"),
 
         F.when(
             (claims != 0) & frequency.isNotNull(),
