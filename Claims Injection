@@ -91,6 +91,7 @@ YTD_FACTOR = 1000
 EXTRA_ROWS = {
     "claims charge py": "Claims Charge py",
     "claims charge ay": "Claims Charge ay",
+    "average cost (€) f/f": "Average Cost (€) f/f",
 }
 
 # Coberturas que não entram na tabela por cobertura
@@ -217,7 +218,7 @@ def upsert_month(spark, table, fields, rows, suk_month):
 # PARTE 1 — RAW (todas as métricas em colunas)
 #   brand_details = linha 3 | period = bloco de colunas | métricas = linhas da coluna B:
 #   Portfolio, Inflows YTD / Earned Premiums YTD (x 1000), "<linha> of <bloco> YTD",
-#   "# Claims Month of <bloco>", Gross LR *, e as EXTRA_ROWS (ex.: Claims Charge py)
+#   "# Claims Month of <bloco>", Gross LR *, e as EXTRA_ROWS (ex.: Claims Charge py, Average Cost (€) f/f)
 # ═══════════════════════════════════════════════════════════════════════════
 def select_rows(ws):
     """Devolve {nome_da_coluna: nº_da_linha} para as linhas a incorporar na raw."""
