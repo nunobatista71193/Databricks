@@ -18,6 +18,10 @@ O LR total do período de referência e do CY aparece nas colunas
 como informação, em "LR IBNR LY (pp)" / "LR IBNR Budget (pp)" e
 "LR IBNR CY (pp)", e não entra nos cálculos.
 
+O prémio médio é por exposição, como a frequência:
+    exposição = nº sinistros / frequência
+    Prémio médio = Earned Premiums YTD / exposição
+
 Cada efeito parte do LR total de referência (LR25 = LR_total_ref):
 
     Variação prémio médio = Prémio_CY / Prémio_ref - 1
@@ -110,17 +114,12 @@ def build_bridge(raw, comparison):
         .when(is_budget, F.lit("BUDGET"))
     )
 
-    # Para períodos mensais, anualiza o prémio com base no número do mês.
-    # Para Budget ou períodos não mensais, considera 12 meses.
-    months = (
-        F.when(
-            is_month_period,
-            F.substring(period, 1, 2).cast("int"),
-        )
-        .otherwise(F.lit(12))
-    )
-
-    portfolio = col("Portfolio").cast("double")
+    # A frequência é por exposição (não por nº de apólices), por isso o prémio médio
+    # também tem de ser por exposição: exposição = nº sinistros / frequência.
+    #   Prémio médio = Earned Premiums YTD / exposição = Earned Premiums YTD x Frequência / nº sinistros
+    # Assim Frequência x Custo médio / Prémio médio = Claims Charge / Earned Premiums.
+    claims = col("# Claims of Total YTD").cast("double")
+    frequency = col("Frequency of Total YTD").cast("double")
 
     base = raw.select(
         col("suk_month").cast("int").alias("suk_month"),
@@ -135,11 +134,8 @@ def build_bridge(raw, comparison):
         col("Average Cost (€) of Total YTD").cast("double").alias("cm"),
 
         F.when(
-            portfolio != 0,
-            col("Earned Premiums YTD").cast("double")
-            / months
-            * 12
-            / portfolio,
+            (claims != 0) & frequency.isNotNull(),
+            col("Earned Premiums YTD").cast("double") * frequency / claims,
         ).alias("pm"),
     ).where(F.col("p").isNotNull())
 
