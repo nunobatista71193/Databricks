@@ -6,10 +6,13 @@ CLAIMS DRIVERS — REAL (um só ficheiro, 3 partes que correm em sequência)
   PARTE 2  core_claims_drivers_coverage_real_all   1 linha por mês x brand_details x period x coverage
   PARTE 3  core_claims_drivers_inflows_real_all    1 linha por mês x brand_details x period (prémios)
 
-Lê só a sheet "Motor" do ficheiro mensal. Cada execução substitui apenas o seu suk_month nas partes 1 e 2
-e deixa os outros meses como estão. A parte 3 lê a tabela raw e reconstrói-se com todos os meses.
+Carrega TODOS os ficheiros .xlsx da pasta de uma só vez (sheet "Motor"). O mês de cada ficheiro é
+deduzido do nome (ano com 4 dígitos + mês por extenso ou abreviado, em inglês ou português).
+Com RESET_TABLES = True as tabelas são apagadas e recriadas a cada execução com todos os meses.
+Para acrescentar um mês, basta pôr o ficheiro na pasta e voltar a correr.
 
-Em cada mês novo muda só SRC_FILE (e REF_YEAR / REF_MONTH, ou põe-nos a None para deduzir do nome).
+Antes de escrever, o código lê e valida todos os ficheiros: se algum falhar, não mexe nas tabelas.
+Se um nome não for deduzido (ou dois ficheiros forem do mesmo mês), usa OVERRIDES.
 Para correr só algumas partes, põe False no RUN_* respetivo.
 """
 import os
@@ -35,17 +38,17 @@ SRC_CATALOG = "agpt_insurance_dv_catalog"
 SRC_SCHEMA  = "wkb_bus_operations_claimsmotor"
 SRC_VOLUME  = "pba&uw"
 SRC_FOLDER  = "01_raw/claims_drivers"   # pasta dentro do volume ("" se estiver na raiz)
-SRC_FILE    = "Claims drivers AGS_OCS_follow up_2025_sent Dez.xlsx"  # <- muda em cada mês
 SHEET_NAME  = "Motor"
 
-# Alternativa: caminho completo, SEMPRE entre aspas, em vez de SRC_FOLDER/SRC_FILE.
-# Exemplo: SRC_PATH = "/Volumes/catalogo/schema/volume/pasta/ficheiro.xlsx"
-SRC_PATH = None
+# None = todos os .xlsx da pasta. Ou uma lista de nomes de ficheiro para carregar só esses.
+SRC_FILES = None
 
-# Mês do ficheiro. None = deduz do nome do ficheiro (ano com 4 dígitos + nome do mês por extenso,
-# em inglês ou português).
-REF_YEAR  = 2025
-REF_MONTH = 12
+# Para nomes de ficheiro de que não se consegue deduzir o mês: {"nome do ficheiro.xlsx": (ano, mês)}
+OVERRIDES = {}
+
+# True = apaga as tabelas raw e coverage e carrega tudo de novo (a parte 3 já se reconstrói sempre).
+# False = só substitui os meses carregados e deixa os restantes.
+RESET_TABLES = True
 
 # Destino: tabelas Delta (acumulam todos os meses)
 TGT_CATALOG = "agpt_insurance_dv_catalog"
@@ -62,8 +65,7 @@ RUN_RAW      = True
 RUN_COVERAGE = True
 RUN_INFLOWS  = True
 
-EXCEL_PATH = SRC_PATH or "/" + "/".join(p.strip("/") for p in
-                                        ["Volumes", SRC_CATALOG, SRC_SCHEMA, SRC_VOLUME, SRC_FOLDER, SRC_FILE] if p)
+SRC_DIR = "/" + "/".join(p.strip("/") for p in ["Volumes", SRC_CATALOG, SRC_SCHEMA, SRC_VOLUME, SRC_FOLDER] if p)
 
 LABEL_COL  = "B"    # coluna com os nomes das linhas
 HEADER_ROW = 3      # linha 3: nome da brand/segmento em cada coluna
@@ -122,6 +124,9 @@ _MONTH_NAMES = {
     "april": 4, "abril": 4, "may": 5, "maio": 5, "june": 6, "junho": 6, "july": 7, "julho": 7,
     "august": 8, "agosto": 8, "september": 9, "setembro": 9, "october": 10, "outubro": 10,
     "november": 11, "novembro": 11, "december": 12, "dezembro": 12,
+    # abreviaturas
+    "jan": 1, "feb": 2, "fev": 2, "mar": 3, "apr": 4, "abr": 4, "mai": 5, "jun": 6, "jul": 7,
+    "aug": 8, "ago": 8, "sep": 9, "sept": 9, "set": 9, "oct": 10, "out": 10, "nov": 11, "dec": 12, "dez": 12,
 }
 
 
@@ -145,17 +150,38 @@ def _key(label):
     return re.sub(r"^#\s*", "# ", label.lower())
 
 
-def reference_month():
-    """(ano, mês) do ficheiro: REF_YEAR/REF_MONTH se definidos, senão deduz do nome do ficheiro."""
-    if REF_YEAR and REF_MONTH:
-        return int(REF_YEAR), int(REF_MONTH)
-    fname = os.path.basename(EXCEL_PATH)
+def reference_month(fname):
+    """(ano, mês) de um ficheiro: OVERRIDES se existir, senão deduz do nome."""
+    if fname in OVERRIDES:
+        return int(OVERRIDES[fname][0]), int(OVERRIDES[fname][1])
     low = fname.lower()
-    year = re.search(r"(?<!\d)(20\d{2})(?!\d)", low)
-    months = [_MONTH_NAMES[t] for t in re.findall(r"[a-zçã]+", low) if t in _MONTH_NAMES]
-    if not year or len(set(months)) != 1:
-        raise ValueError(f"Não consegui deduzir ano/mês de '{fname}'. Define REF_YEAR e REF_MONTH no topo.")
-    return int(year.group(1)), months[0]
+    years = set(re.findall(r"(?<!\d)(20\d{2})(?!\d)", low))
+    months = {_MONTH_NAMES[t] for t in re.findall(r"[a-zçã]+", low) if t in _MONTH_NAMES}
+    if len(years) != 1 or len(months) != 1:
+        raise ValueError(f"não consegui deduzir ano/mês (anos {sorted(years)}, meses {sorted(months)}); usa OVERRIDES")
+    return int(years.pop()), months.pop()
+
+
+def build_plan():
+    """[(ficheiro, ano, mês)] ordenado por mês; falha se houver nomes ambíguos ou meses repetidos."""
+    if SRC_FILES:
+        names = list(SRC_FILES)
+    else:
+        names = sorted(f for f in os.listdir(SRC_DIR) if f.lower().endswith(".xlsx") and not f.startswith("~$"))
+    plan, errors = [], []
+    for f in names:
+        try:
+            y, m = reference_month(f)
+            plan.append((f, y, m))
+        except ValueError as e:
+            errors.append(f"{f}: {e}")
+    seen = {}
+    for f, y, m in plan:
+        seen.setdefault((y, m), []).append(f)
+    errors += [f"{y}-{m:02d} repetido em: {', '.join(fs)}" for (y, m), fs in seen.items() if len(fs) > 1]
+    if errors:
+        raise ValueError("Problemas nos nomes dos ficheiros:\n  " + "\n  ".join(errors))
+    return sorted(plan, key=lambda x: (x[1], x[2]))
 
 
 def get_sheet(wb):
@@ -291,8 +317,7 @@ def parse_raw(ws, year, month):
     return out, list(rows)
 
 
-def run_raw(spark, ws, year, month):
-    recs, cols = parse_raw(ws, year, month)
+def run_raw(spark, recs, cols, year, month):
     suk_month = year * 100 + month
     print(f"[1 raw] suk_month = {suk_month}: {len(recs)} colunas de dados, {len(cols)} métricas")
     fields = [("suk_month", "INT"), ("brand_details", "STRING"), ("period", "STRING")] + [(c, "DOUBLE") for c in cols]
@@ -363,8 +388,7 @@ def parse_coverage(ws, year, month):
     return out
 
 
-def run_coverage(spark, ws, year, month):
-    recs = parse_coverage(ws, year, month)
+def run_coverage(spark, recs, year, month):
     suk_month = year * 100 + month
     print(f"[2 cobertura] suk_month = {suk_month}: {len(recs)} linhas")
     fields = [("suk_month", "INT"), ("brand_details", "STRING"), ("period", "STRING"), ("coverage", "STRING")] \
@@ -445,17 +469,47 @@ def run_inflows(spark):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# EXECUÇÃO (em sequência: 1 -> 2 -> 3)
+# EXECUÇÃO: 1) lê e valida todos os ficheiros  2) apaga as tabelas  3) carrega tudo  4) parte 3
 # ═══════════════════════════════════════════════════════════════════════════
 def main():
-    year, month = reference_month()
-    print(f"Ficheiro {os.path.basename(EXCEL_PATH)}: suk_month = {year * 100 + month}")
+    plan = build_plan()
+    print(f"{len(plan)} ficheiros em {SRC_DIR}:")
+    for f, y, m in plan:
+        print(f"  {y * 100 + m}  {f}")
+
+    # 1) leitura e validação (ainda sem tocar nas tabelas)
+    loaded, errors = [], []
     if RUN_RAW or RUN_COVERAGE:
-        ws = get_sheet(load_workbook(EXCEL_PATH, data_only=True, read_only=False))  # abre o Excel uma só vez
+        for f, y, m in plan:
+            try:
+                wb = load_workbook(os.path.join(SRC_DIR, f), data_only=True, read_only=False)
+                try:
+                    ws = get_sheet(wb)
+                    raw = parse_raw(ws, y, m) if RUN_RAW else None
+                    cov = parse_coverage(ws, y, m) if RUN_COVERAGE else None
+                finally:
+                    wb.close()
+                loaded.append((y, m, raw, cov))
+            except Exception as e:  # noqa: BLE001
+                errors.append(f"{f}: {e}")
+        if errors:
+            raise ValueError("Erros na leitura (as tabelas não foram alteradas):\n  " + "\n  ".join(errors))
+
+    # 2) apaga as tabelas (a parte 3 apaga-se e recria-se sozinha)
+    if RESET_TABLES:
         if RUN_RAW:
-            run_raw(spark, ws, year, month)  # `spark` existe nos notebooks Databricks
+            spark.sql(f"DROP TABLE IF EXISTS {TABLE_RAW}")
         if RUN_COVERAGE:
-            run_coverage(spark, ws, year, month)
+            spark.sql(f"DROP TABLE IF EXISTS {TABLE_COVERAGE}")
+
+    # 3) carrega um mês de cada vez, do mais antigo para o mais recente
+    for y, m, raw, cov in loaded:
+        if RUN_RAW:
+            run_raw(spark, raw[0], raw[1], y, m)  # `spark` existe nos notebooks Databricks
+        if RUN_COVERAGE:
+            run_coverage(spark, cov, y, m)
+
+    # 4) prémios (lê a raw)
     if RUN_INFLOWS:
         run_inflows(spark)
 
