@@ -11,7 +11,7 @@ PONTE DO LOSS RATIO — wrk_lr_bridge e wrk_lr_bridge_myb
 METODOLOGIA DOS CÁLCULOS
 ------------------------
 O LR total do período de referência e do CY aparece nas colunas
-"LR PY (pp)" / "LR Budget (pp)" e "LR CY (pp)". O LR IBNR é usado
+"LR LY (pp)" / "LR Budget (pp)" e "LR CY (pp)". O LR IBNR é usado
 internamente e não aparece como coluna.
 
 LR sem IBNR = LR total - LR IBNR
@@ -202,7 +202,7 @@ def build_bridge(raw, comparison):
         "suk_month",
         "brand_details",
 
-        (F.col("lr_total0") * scale).alias(f"LR {comparison_label} (pp)"),
+        (F.col("lr_total0") * scale).alias("LR LY (pp)" if comparison == "PY" else "LR Budget (pp)"),
         (F.col("lr_total1") * scale).alias("LR CY (pp)"),
 
         ((lr_a - lr_ex_ibnr0) * scale).alias(
