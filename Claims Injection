@@ -10,47 +10,38 @@ PONTE DO LOSS RATIO — wrk_lr_bridge e wrk_lr_bridge_myb
 
 METODOLOGIA DOS CÁLCULOS
 ------------------------
+Os cálculos partem do LR TOTAL (com IBNR), porque o custo médio já inclui
+o IBNR. Por isso não há efeito IBNR separado na ponte.
+
 O LR total do período de referência e do CY aparece nas colunas
-"LR LY (pp)" / "LR Budget (pp)" e "LR CY (pp)". O LR IBNR é usado
-também aparece nas colunas "LR IBNR LY (pp)" / "LR IBNR Budget (pp)" e "LR IBNR CY (pp)", por marca.
+"LR LY (pp)" / "LR Budget (pp)" e "LR CY (pp)". O LR IBNR aparece apenas
+como informação, em "LR IBNR LY (pp)" / "LR IBNR Budget (pp)" e
+"LR IBNR CY (pp)", e não entra nos cálculos.
 
-LR sem IBNR = LR total - LR IBNR
-
-Os efeitos de prémio e de burning cost são calculados, cada um, sobre o
-LR sem IBNR do período de referência (LR25 = LR_sem_IBNR_ref):
+Cada efeito parte do LR total de referência (LR25 = LR_total_ref):
 
     Variação prémio médio = Prémio_CY / Prémio_ref - 1
     LR_a = LR25 / (1 + Variação prémio médio)
-    Efeito prémio = LR_a - LR_sem_IBNR_ref
+    Efeito prémio = LR_a - LR_total_ref
 
     Burning cost = Frequência x Custo médio
     LR_a = LR25 x (1 + Variação frequência) x (1 + Variação custo médio)
-    Efeito burning cost = LR_a - LR_sem_IBNR_ref
+    Efeito burning cost = LR_a - LR_total_ref
 
-(o burning cost substitui os efeitos de custo médio e de frequência)
+"Outros" é o residual (inclui a interação entre prémio e burning cost,
+já que cada efeito parte do LR de referência):
 
-O efeito IBNR é um delta direto, sem aplicar os fatores da ponte:
-
-    Efeito IBNR = LR_IBNR_CY - LR_IBNR_ref
-
-"Outros" é o residual do LR sem IBNR (inclui a interação entre prémio
-e burning cost, já que cada efeito parte do LR de referência):
-
-    Efeito outros = (LR_sem_IBNR_CY - LR_sem_IBNR_ref)
+    Efeito outros = (LR_total_CY - LR_total_ref)
                     - Efeito prémio - Efeito burning cost
 
 Logo, a reconciliação é:
 
-    Efeito prémio
-    + Efeito burning cost
-    + Efeito IBNR
-    + Efeito outros
+    Efeito prémio + Efeito burning cost + Efeito outros
     = variação do LR total
 
-Diagnóstico: k = LR sem IBNR / (Frequência x Custo médio / Prémio médio),
+Diagnóstico: k = LR total / (Frequência x Custo médio / Prémio médio),
 nas colunas "k LY" / "k Budget" e "k CY". Se k for parecido nos dois
-períodos, "Outros" fica perto de zero; se mudar, a diferença vem da
-composição do LR ou de diferenças de base entre o LR e os fatores.
+períodos, "Outros" fica perto de zero.
 
 Os efeitos são multiplicados por LR_TO_PP para serem expressos em pp.
 """
@@ -168,9 +159,9 @@ def build_bridge(raw, comparison):
         "inner",
     )
 
-    # Retira IBNR do LR total antes de calcular os efeitos dos fatores.
-    lr_ex_ibnr0 = F.col("lr_total0") - F.col("ibnr0")
-    lr_ex_ibnr1 = F.col("lr_total1") - F.col("ibnr1")
+    # Base dos cálculos: LR total (o custo médio já inclui o IBNR).
+    lr0 = F.col("lr_total0")
+    lr1 = F.col("lr_total1")
 
     valid_factors = (
         F.col("pm0").isNotNull()
@@ -190,14 +181,14 @@ def build_bridge(raw, comparison):
     var_custo = F.col("cm1") / F.col("cm0") - 1
 
     # Efeito prémio: LR_a = LR25 / (1 + variação prémio médio).
-    lr_a_premio = F.when(valid_factors, lr_ex_ibnr0 / (1 + var_premio))
+    lr_a_premio = F.when(valid_factors, lr0 / (1 + var_premio))
     # Efeito burning cost: LR_a = LR25 x (1 + variação frequência) x (1 + variação custo médio).
     lr_a_burning = F.when(
         valid_factors,
-        lr_ex_ibnr0 * (1 + var_freq) * (1 + var_custo),
+        lr0 * (1 + var_freq) * (1 + var_custo),
     )
 
-    # Diagnóstico do "Outros": k = LR sem IBNR / (Frequência x Custo médio / Prémio médio).
+    # Diagnóstico do "Outros": k = LR total / (Frequência x Custo médio / Prémio médio).
     # Se k for parecido na referência e no CY, "Outros" fica perto de zero.
     def k_factor(lr_ex, fr, cm, pm):
         model = fr * cm / pm
@@ -206,19 +197,16 @@ def build_bridge(raw, comparison):
             lr_ex / model,
         )
 
-    k_ref = k_factor(lr_ex_ibnr0, F.col("fr0"), F.col("cm0"), F.col("pm0"))
-    k_cy = k_factor(lr_ex_ibnr1, F.col("fr1"), F.col("cm1"), F.col("pm1"))
+    k_ref = k_factor(lr0, F.col("fr0"), F.col("cm0"), F.col("pm0"))
+    k_cy = k_factor(lr1, F.col("fr1"), F.col("cm1"), F.col("pm1"))
 
     scale = F.lit(float(LR_TO_PP))
 
-    # Delta direto do IBNR, sem aplicação de fatores.
-    efeito_ibnr = (F.col("ibnr1") - F.col("ibnr0")) * scale
+    efeito_premio = (lr_a_premio - lr0) * scale
+    efeito_burning = (lr_a_burning - lr0) * scale
 
-    efeito_premio = (lr_a_premio - lr_ex_ibnr0) * scale
-    efeito_burning = (lr_a_burning - lr_ex_ibnr0) * scale
-
-    # Residual necessário para reconciliar o LR sem IBNR.
-    efeito_outros = (lr_ex_ibnr1 - lr_ex_ibnr0) * scale - efeito_premio - efeito_burning
+    # Residual necessário para reconciliar a variação do LR total.
+    efeito_outros = (lr1 - lr0) * scale - efeito_premio - efeito_burning
 
     # LR de referência e CY, contribuições da ponte e fatores usados.
     return joined.select(
@@ -234,7 +222,6 @@ def build_bridge(raw, comparison):
 
         efeito_premio.alias("Efeito prémio médio (pp)"),
         efeito_burning.alias("Efeito burning cost (pp)"),
-        efeito_ibnr.alias("Efeito IBNR (pp)"),
         efeito_outros.alias("Efeito outros (pp)"),
 
         F.col("pm0").alias(f"Prémio médio {comparison_label}"),
