@@ -268,6 +268,13 @@ def run_bridge(spark):
 
     raw = spark.table(TABLE_RAW)
 
+    missing = [c for c in ("Average Cost (€) f/f",) if c not in raw.columns]
+    if missing:
+        raise ValueError(
+            f"A raw ainda não tem a coluna {missing}. Corre o script principal "
+            "(parte 1, RUN_RAW = True) com o ficheiro de cada mês para a criar."
+        )
+
     # Cria a ponte PY se ainda não existir. Se existir com colunas antigas
     # de LR, reconstrói-a para aplicar o esquema atual sem colunas de LR.
     py_bridge = build_bridge(raw, "PY")
