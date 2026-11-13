@@ -102,6 +102,13 @@ EXTRA_ROWS = {
 # Coberturas que não entram na tabela por cobertura
 COVERAGE_EXCLUDE = {"IBNR", "IBNR/IBNER", "IBNER", "Zoom on Large Claims:"}
 
+# Nº de sinistros que a parte 3 copia da raw: (nome na tabela de prémios, nome da coluna na raw)
+INFLOWS_CLAIMS_COUNT_COLS = [
+    ("# Claims Total YTD", "# Claims of Total YTD"),
+    ("# Claims Large Claims YTD", "# Claims of Large Claims YTD"),
+    ("# Claims Attritional YTD", "# Claims of Attritional YTD"),
+]
+
 # Claims Charge que a parte 3 copia da raw: (nome na tabela de prémios, nome da coluna na raw)
 INFLOWS_CLAIMS_COLS = [
     ("Claims Charge IBNR YTD", "Claims Charge of IBNR YTD"),
@@ -417,6 +424,7 @@ def run_coverage(spark, recs, year, month):
 #   "Average Premium Inflows" = Inflows YTD / meses * 12 / Portfolio
 #   "Average Premium Earned"  = Earned Premiums YTD / meses * 12 / Portfolio
 #   "Earned Premium / Inflows"= Average Premium Earned / Average Premium Inflows
+#   + # Claims Total / Large Claims / Attritional YTD (da raw)
 #   + Claims Charge cy / py / ay YTD (da raw, já ×1000) e os Gross LR de INFLOWS_EXTRA_COLS.
 #   Divisões por zero ou por valores vazios ficam a null. period: FY.., B.., CY ou PY.
 # ═══════════════════════════════════════════════════════════════════════════
@@ -455,6 +463,7 @@ def build_inflows(raw):
         avg_inf.alias("Average Premium Inflows"),
         avg_earn.alias("Average Premium Earned"),
         ratio.alias("Earned Premium / Inflows"),
+        *[F.col(src).cast("double").alias(out) for out, src in INFLOWS_CLAIMS_COUNT_COLS],
         *[F.col(src).cast("double").alias(out) for out, src in INFLOWS_CLAIMS_COLS],
         *[F.col(c).cast("double").alias(c) for c in INFLOWS_EXTRA_COLS],
     )
@@ -469,7 +478,8 @@ def run_inflows(spark):
         ("Inflows YTD", "DOUBLE"), ("Portfolio", "DOUBLE"), ("Earned Premiums YTD", "DOUBLE"),
         ("Average Premium Inflows", "DOUBLE"), ("Average Premium Earned", "DOUBLE"),
         ("Earned Premium / Inflows", "DOUBLE"),
-    ] + [(out, "DOUBLE") for out, _ in INFLOWS_CLAIMS_COLS] + [(c, "DOUBLE") for c in INFLOWS_EXTRA_COLS]
+    ] + [(out, "DOUBLE") for out, _ in INFLOWS_CLAIMS_COUNT_COLS] \
+      + [(out, "DOUBLE") for out, _ in INFLOWS_CLAIMS_COLS] + [(c, "DOUBLE") for c in INFLOWS_EXTRA_COLS]
 
     sdf = build_inflows(spark.table(TABLE_RAW))
     spark.sql(f"DROP TABLE IF EXISTS {TABLE_INFLOWS}")
