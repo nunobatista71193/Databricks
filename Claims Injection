@@ -1,299 +1,534 @@
 # -*- coding: utf-8 -*-
 """
-PONTE DO LOSS RATIO — wrk_lr_bridge e wrk_lr_bridge_myb
+CLAIMS DRIVERS — REAL (um só ficheiro, 3 partes que correm em sequência)
 
-- wrk_lr_bridge: ponte PY (ano anterior) vs CY.
-- wrk_lr_bridge_myb: ponte Budget vs CY.
-As duas são apagadas e reconstruídas em cada execução, a partir da raw.
+  PARTE 1  raw_claims_drivers_real_all             1 linha por mês x brand_details x period
+  PARTE 2  core_claims_drivers_coverage_real_all   1 linha por mês x brand_details x period x coverage
+  PARTE 3  core_claims_drivers_inflows_real_all    1 linha por mês x brand_details x period (prémios)
 
-METODOLOGIA DOS CÁLCULOS
-------------------------
-Fatores (por exposição):
-    exposição      = nº sinistros / frequência          ("# Claims of Total YTD" / "Frequency of Total YTD")
-    Prémio médio   = Earned Premiums YTD / exposição
-    Custo médio    = (Claims Charge of Total YTD - Claims Charge of IBNR YTD) / # Claims of Total YTD
-                     (custo médio SEM IBNR)
-    Burning cost   = Frequência x Custo médio
+Carrega TODOS os ficheiros .xlsx da pasta de uma só vez (sheet "Motor"). O mês de cada ficheiro é
+deduzido do nome (ano com 4 dígitos + mês por extenso ou abreviado, em inglês ou português).
+Com RESET_TABLES = True as tabelas são apagadas e recriadas a cada execução com todos os meses.
+Para acrescentar um mês, basta pôr o ficheiro na pasta e voltar a correr.
 
-Base do LR (LR_TO_PP converte em pp):
-    Com LR_BASE_SEM_IBNR = True (por omissão), os efeitos partem do LR sem IBNR:
-        LR sem IBNR = Gross LR Total cy - Gross LR IBNR
-    e o IBNR entra como efeito próprio (delta direto):
-        Efeito IBNR = Gross LR IBNR CY - Gross LR IBNR ref
-    Com LR_BASE_SEM_IBNR = False, parte-se do LR total e não há efeito IBNR.
-
-Cada efeito parte do LR de referência (LR25 = LR base de referência):
-
-    Variação X = X_CY / X_ref - 1                       (X = prémio médio, frequência, custo médio)
-
-    Efeito prémio        = LR25 / (1 + Variação prémio médio) - LR25
-    Efeito frequência    = LR25 x (1 + Variação frequência) - LR25
-    Efeito custo médio   = LR25 x (1 + Variação custo médio) - LR25
-    Efeito burning cost  = LR25 x (1 + Variação frequência) x (1 + Variação custo médio) - LR25
-
-Frequência e custo médio são mostrados isoladamente; a soma dos dois difere do burning cost só
-pela interação entre ambos. Na reconciliação entra o burning cost (não os dois isolados):
-
-    Efeito outros = (LR base CY - LR base ref) - Efeito prémio - Efeito burning cost
-                    [- Efeito IBNR, quando a base é sem IBNR: ver abaixo]
-
-    Efeito prémio + Efeito burning cost + Efeito IBNR + Efeito outros = variação do LR total
-
-As colunas "LR LY (pp)" / "LR Budget (pp)" e "LR CY (pp)" são o LR total. "LR IBNR ..." é informação.
-
-Diagnóstico: k = LR base / (Frequência x Custo médio / Prémio médio),
-nas colunas "k LY" / "k Budget" e "k CY". Se k for parecido nos dois
-períodos, "Outros" fica perto de zero.
-
-Os efeitos são multiplicados por LR_TO_PP para serem expressos em pp.
+Antes de escrever, o código lê e valida todos os ficheiros: se algum falhar, não mexe nas tabelas.
+Se um nome não for deduzido (ou dois ficheiros forem do mesmo mês), usa OVERRIDES.
+Para correr só algumas partes, põe False no RUN_* respetivo.
 """
+import os
+import re
+import sys
+import subprocess
+import importlib
 
-from pyspark.sql import functions as F
+try:
+    import openpyxl  # noqa: F401
+except ModuleNotFoundError:  # cluster sem openpyxl: instala e continua
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "openpyxl"])
+    importlib.invalidate_caches()
+
+from openpyxl import load_workbook
+from openpyxl.utils import column_index_from_string
 
 # ═══════════════════════════════════════════════════════════════════════════
-# CONFIGURAÇÃO
+# CONFIGURAÇÃO (comum às 3 partes)
 # ═══════════════════════════════════════════════════════════════════════════
+# Origem: ficheiro Excel num Volume do Unity Catalog
+SRC_CATALOG = "agpt_insurance_dv_catalog"
+SRC_SCHEMA  = "wkb_bus_operations_claimsmotor"
+SRC_VOLUME  = "pba&uw"
+SRC_FOLDER  = "01_raw/claims_drivers"   # pasta dentro do volume ("" se estiver na raiz)
+SHEET_NAME  = "Motor"
 
+# None = todos os .xlsx da pasta. Ou uma lista de nomes de ficheiro para carregar só esses.
+SRC_FILES = None
+
+# Para nomes de ficheiro de que não se consegue deduzir o mês: {"nome do ficheiro.xlsx": (ano, mês)}
+OVERRIDES = {}
+
+# True = apaga as tabelas raw e coverage e carrega tudo de novo (a parte 3 já se reconstrói sempre).
+# False = só substitui os meses carregados e deixa os restantes.
+RESET_TABLES = True
+
+# Destino: tabelas Delta (acumulam todos os meses)
 TGT_CATALOG = "agpt_insurance_dv_catalog"
-TGT_SCHEMA = "wkb_bus_operations_claimsmotor"
+TGT_SCHEMA  = "wkb_bus_operations_claimsmotor"
+TGT_TABLE_RAW      = "raw_claims_drivers_real_all"
+TGT_TABLE_COVERAGE = "core_claims_drivers_coverage_real_all"
+TGT_TABLE_INFLOWS  = "core_claims_drivers_inflows_real_all"
 
-TGT_TABLE_RAW = "raw_claims_drivers_real_all"
-TGT_TABLE_BRIDGE = "wrk_lr_bridge"
-TGT_TABLE_BRIDGE_MYB = "wrk_lr_bridge_myb"
+TABLE_RAW      = f"{TGT_CATALOG}.{TGT_SCHEMA}.{TGT_TABLE_RAW}"
+TABLE_COVERAGE = f"{TGT_CATALOG}.{TGT_SCHEMA}.{TGT_TABLE_COVERAGE}"
+TABLE_INFLOWS  = f"{TGT_CATALOG}.{TGT_SCHEMA}.{TGT_TABLE_INFLOWS}"
 
-TABLE_RAW = f"{TGT_CATALOG}.{TGT_SCHEMA}.{TGT_TABLE_RAW}"
-TABLE_BRIDGE = f"{TGT_CATALOG}.{TGT_SCHEMA}.{TGT_TABLE_BRIDGE}"
-TABLE_BRIDGE_MYB = f"{TGT_CATALOG}.{TGT_SCHEMA}.{TGT_TABLE_BRIDGE_MYB}"
+RUN_RAW      = True
+RUN_COVERAGE = True
+RUN_INFLOWS  = True
 
-# True: os efeitos partem do LR sem IBNR e o IBNR é um efeito à parte (o custo médio é sem IBNR).
-# False: partem do LR total, sem efeito IBNR.
-LR_BASE_SEM_IBNR = True
+SRC_DIR = "/" + "/".join(p.strip("/") for p in ["Volumes", SRC_CATALOG, SRC_SCHEMA, SRC_VOLUME, SRC_FOLDER] if p)
 
-# 100 se o Gross LR vem em fração (por exemplo, 0.554).
-# 1 se já vem em percentagem (por exemplo, 55.4).
-LR_TO_PP = 100
+LABEL_COL  = "B"    # coluna com os nomes das linhas
+HEADER_ROW = 3      # linha 3: nome da brand/segmento em cada coluna
+FIRST_DATA_ROW = 4
+
+# Blocos de colunas e o período que cada um representa.
+# Placeholders: {yy} ano do ficheiro, {y1} {y2} {y3} = yy-1, yy-2, yy-3, {mm} mês do ficheiro (2 dígitos).
+PERIOD_BLOCKS = [
+    ("D",  "L",  "FY {y3}"),
+    ("N",  "V",  "FY {y2}"),
+    ("X",  "AF", "FY {y1}"),
+    ("AH", "AP", "B{yy}"),
+    ("AR", "AZ", "{mm} {y1}"),
+    ("BB", "BJ", "{mm} {yy}"),
+]
+# Colunas soltas: (coluna, período, brand_details). A brand é forçada (ignora a linha 3).
+# {yy} = ano do ficheiro: BM = "B26 YTD" (orçamento acumulado até ao mês) só para a Non Life.
+EXTRA_COLUMNS = [("BM", "B{yy} YTD", "Non Life")]
+BRAND_MAP = {}            # opcional: {"AGS ND": "AGS ND"} para renomear brands
+SKIP_EMPTY_MONTHS = True  # ignora colunas em que todas as métricas estão vazias
+
+# Linhas que ganham o sufixo " YTD" no nome da coluna e são multiplicadas por 1000 (k€ -> €)
+YTD_ROWS = {"inflows", "earned premiums"}
+YTD_SUFFIX = " YTD"
+YTD_FACTOR = 1000
+
+# Linhas soltas que entram na raw com o nome indicado: {"etiqueta na coluna B": "nome da coluna"}
+EXTRA_ROWS = {
+    "claims charge py": "Claims Charge py",
+    "claims charge ay": "Claims Charge ay",
+    "average cost (€) f/f": "Average Cost (€) f/f",
+}
+
+# Coberturas que não entram na tabela por cobertura
+COVERAGE_EXCLUDE = {"IBNR", "IBNR/IBNER", "IBNER", "Zoom on Large Claims:"}
+
+# Claims Charge que a parte 3 copia da raw: (nome na tabela de prémios, nome da coluna na raw)
+INFLOWS_CLAIMS_COLS = [
+    ("Claims Charge IBNR YTD", "Claims Charge of IBNR YTD"),
+    ("Claims Charge IBNER YTD", "Claims Charge of IBNER YTD"),
+    ("Claims Charge IBNR/IBNER YTD", "Claims Charge of IBNR/IBNER YTD"),
+    ("Claims Charge cy YTD", "Claims Charge of Total YTD"),
+    ("Claims Charge py YTD", "Claims Charge py"),
+    ("Claims Charge ay YTD", "Claims Charge ay"),
+]
+# Colunas da raw que a parte 3 copia tal e qual
+INFLOWS_EXTRA_COLS = ["Gross LR CY f/f", "Gross LR IBNR", "Gross LR Total cy", "Gross LR Total py", "Gross LR Total ay"]
+
+# ═══════════════════════════════════════════════════════════════════════════
+# COMUM: leitura do Excel e escrita em Delta
+# ═══════════════════════════════════════════════════════════════════════════
+SIMPLE_ROWS = {"portfolio", "portfólio", "inflows", "earned premiums"}
+CLAIMS_MONTH_RE = re.compile(r"^#\s*claims\s*month$", re.I)
+# Linhas de cada bloco que passam a "<linha> of <bloco> YTD"
+BLOCK_METRICS = {"# claims", "frequency", "average cost (€)", "claims charge"}
+
+_MONTH_NAMES = {
+    "january": 1, "janeiro": 1, "february": 2, "fevereiro": 2, "march": 3, "marco": 3, "março": 3,
+    "april": 4, "abril": 4, "may": 5, "maio": 5, "june": 6, "junho": 6, "july": 7, "julho": 7,
+    "august": 8, "agosto": 8, "september": 9, "setembro": 9, "october": 10, "outubro": 10,
+    "november": 11, "novembro": 11, "december": 12, "dezembro": 12,
+    # abreviaturas
+    "jan": 1, "feb": 2, "fev": 2, "mar": 3, "apr": 4, "abr": 4, "mai": 5, "jun": 6, "jul": 7,
+    "aug": 8, "ago": 8, "sep": 9, "sept": 9, "set": 9, "oct": 10, "out": 10, "nov": 11, "dec": 12, "dez": 12,
+}
 
 
-def col(name):
-    """Referencia nomes de colunas com espaços ou caracteres especiais."""
-    return F.col("`" + name.replace("`", "``") + "`")
+def norm(v):
+    """Texto limpo: sem espaços repetidos nem nas pontas."""
+    return re.sub(r"\s+", " ", str(v)).strip() if v is not None else ""
 
 
-def build_bridge(raw, comparison):
-    """
-    Constrói os efeitos da ponte CY vs período de comparação.
+def to_number(v):
+    if v is None or isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    try:
+        return float(str(v).replace(" ", "").replace(" ", "").replace(",", "."))
+    except ValueError:
+        return None  # #DIV/0!, #N/A, texto...
 
-    comparison:
-        "PY"     -> ano imediatamente anterior vs CY
-        "BUDGET" -> Budget do mesmo ano vs CY
-    """
-    if comparison not in ("PY", "BUDGET"):
-        raise ValueError("comparison tem de ser 'PY' ou 'BUDGET'.")
 
-    period = F.upper(F.trim(col("period").cast("string")))
-    year2 = F.substring(col("suk_month").cast("string"), 3, 2)
-    period_year = F.regexp_extract(period, r"([0-9]{2})$", 1)
+def _key(label):
+    return re.sub(r"^#\s*", "# ", label.lower())
 
-    is_month_period = period.rlike(r"^[0-9]{2} ")
 
-    # PY é apenas o ano imediatamente anterior, não qualquer ano diferente.
-    previous_year2 = F.lpad(
-        F.pmod(
-            year2.cast("int") - F.lit(1),
-            F.lit(100),
-        ).cast("string"),
-        2,
-        "0",
-    )
+def reference_month(fname):
+    """(ano, mês) de um ficheiro: OVERRIDES se existir, senão deduz do nome."""
+    if fname in OVERRIDES:
+        return int(OVERRIDES[fname][0]), int(OVERRIDES[fname][1])
+    low = fname.lower()
+    years = set(re.findall(r"(?<!\d)(20\d{2})(?!\d)", low))
+    months = {_MONTH_NAMES[t] for t in re.findall(r"[a-zçã]+", low) if t in _MONTH_NAMES}
+    if len(years) != 1 or len(months) != 1:
+        raise ValueError(f"não consegui deduzir ano/mês (anos {sorted(years)}, meses {sorted(months)}); usa OVERRIDES")
+    return int(years.pop()), months.pop()
 
-    is_cy = is_month_period & (period_year == year2)
-    is_py = is_month_period & (period_year == previous_year2)
-    is_budget = period == F.concat(F.lit("B"), year2)
 
-    period_out = (
-        F.when(is_cy, F.lit("CY"))
-        .when(is_py, F.lit("PY"))
-        .when(is_budget, F.lit("BUDGET"))
-    )
-
-    # A frequência é por exposição (não por nº de apólices), por isso o prémio médio
-    # também tem de ser por exposição: exposição = nº sinistros / frequência.
-    #   Prémio médio = Earned Premiums YTD / exposição = Earned Premiums YTD x Frequência / nº sinistros
-    claims = col("# Claims of Total YTD").cast("double")
-    frequency = col("Frequency of Total YTD").cast("double")
-    charge_total = col("Claims Charge of Total YTD").cast("double")
-    charge_ibnr = col("Claims Charge of IBNR YTD").cast("double")
-
-    base = raw.select(
-        col("suk_month").cast("int").alias("suk_month"),
-        col("brand_details"),
-        period_out.alias("p"),
-
-        col("Gross LR Total cy").cast("double").alias("lr_total"),
-        col("Gross LR IBNR").cast("double").alias("ibnr"),
-
-        frequency.alias("fr"),
-
-        # Custo médio sem IBNR = (Claims Charge Total - Claims Charge IBNR) / nº sinistros
-        F.when(claims != 0, (charge_total - charge_ibnr) / claims).alias("cm"),
-
-        F.when(
-            (claims != 0) & frequency.isNotNull(),
-            col("Earned Premiums YTD").cast("double") * frequency / claims,
-        ).alias("pm"),
-    ).where(F.col("p").isNotNull())
-
-    comparison_period = "PY" if comparison == "PY" else "BUDGET"
-    comparison_label = "PY" if comparison == "PY" else "Budget"
-
-    reference = base.where(F.col("p") == comparison_period).drop("p")
-    cy = base.where(F.col("p") == "CY").drop("p")
-
-    for name in ("lr_total", "ibnr", "fr", "cm", "pm"):
-        reference = reference.withColumnRenamed(name, name + "0")
-        cy = cy.withColumnRenamed(name, name + "1")
-
-    joined = reference.join(
-        cy,
-        ["suk_month", "brand_details"],
-        "inner",
-    )
-
-    # Base dos cálculos: LR sem IBNR (o custo médio é sem IBNR) ou LR total.
-    if LR_BASE_SEM_IBNR:
-        lr0 = F.col("lr_total0") - F.col("ibnr0")
-        lr1 = F.col("lr_total1") - F.col("ibnr1")
+def build_plan():
+    """[(ficheiro, ano, mês)] ordenado por mês; falha se houver nomes ambíguos ou meses repetidos."""
+    if SRC_FILES:
+        names = list(SRC_FILES)
     else:
-        lr0 = F.col("lr_total0")
-        lr1 = F.col("lr_total1")
-
-    valid_factors = (
-        F.col("pm0").isNotNull()
-        & F.col("pm1").isNotNull()
-        & F.col("cm0").isNotNull()
-        & F.col("cm1").isNotNull()
-        & F.col("fr0").isNotNull()
-        & F.col("fr1").isNotNull()
-        & (F.col("pm1") != 0)
-        & (F.col("cm0") != 0)
-        & (F.col("fr0") != 0)
-    )
-
-    # Variações face à referência.
-    var_premio = F.col("pm1") / F.col("pm0") - 1
-    var_freq = F.col("fr1") / F.col("fr0") - 1
-    var_custo = F.col("cm1") / F.col("cm0") - 1
-
-    # Cada efeito parte do LR de referência (LR25).
-    lr_a_premio = F.when(valid_factors, lr0 / (1 + var_premio))
-    lr_a_freq = F.when(valid_factors, lr0 * (1 + var_freq))
-    lr_a_custo = F.when(valid_factors, lr0 * (1 + var_custo))
-    lr_a_burning = F.when(valid_factors, lr0 * (1 + var_freq) * (1 + var_custo))
-
-    # Diagnóstico do "Outros": k = LR base / (Frequência x Custo médio / Prémio médio).
-    def k_factor(lr_base, fr, cm, pm):
-        model = fr * cm / pm
-        return F.when(
-            fr.isNotNull() & cm.isNotNull() & pm.isNotNull() & (pm != 0) & (model != 0),
-            lr_base / model,
-        )
-
-    k_ref = k_factor(lr0, F.col("fr0"), F.col("cm0"), F.col("pm0"))
-    k_cy = k_factor(lr1, F.col("fr1"), F.col("cm1"), F.col("pm1"))
-
-    scale = F.lit(float(LR_TO_PP))
-
-    efeito_premio = (lr_a_premio - lr0) * scale
-    efeito_freq = (lr_a_freq - lr0) * scale
-    efeito_custo = (lr_a_custo - lr0) * scale
-    efeito_burning = (lr_a_burning - lr0) * scale
-
-    # Residual: o que o prémio e o burning cost não explicam no LR base.
-    efeito_outros = (lr1 - lr0) * scale - efeito_premio - efeito_burning
-
-    effect_cols = [
-        efeito_premio.alias("Efeito prémio médio (pp)"),
-        efeito_freq.alias("Efeito frequência (pp)"),
-        efeito_custo.alias("Efeito custo médio (pp)"),
-        efeito_burning.alias("Efeito burning cost (pp)"),
-    ]
-    if LR_BASE_SEM_IBNR:
-        # Delta direto do IBNR, sem aplicar os fatores da ponte.
-        effect_cols.append(((F.col("ibnr1") - F.col("ibnr0")) * scale).alias("Efeito IBNR (pp)"))
-    effect_cols.append(efeito_outros.alias("Efeito outros (pp)"))
-
-    # LR de referência e CY, efeitos da ponte e fatores usados.
-    return joined.select(
-        "suk_month",
-        "brand_details",
-
-        (F.col("lr_total0") * scale).alias("LR LY (pp)" if comparison == "PY" else "LR Budget (pp)"),
-        (F.col("lr_total1") * scale).alias("LR CY (pp)"),
-        (F.col("ibnr0") * scale).alias(
-            "LR IBNR LY (pp)" if comparison == "PY" else "LR IBNR Budget (pp)"
-        ),
-        (F.col("ibnr1") * scale).alias("LR IBNR CY (pp)"),
-
-        *effect_cols,
-
-        F.col("pm0").alias(f"Prémio médio {comparison_label}"),
-        F.col("pm1").alias("Prémio médio CY"),
-        F.col("cm0").alias(f"Custo médio {comparison_label}"),
-        F.col("cm1").alias("Custo médio CY"),
-        F.col("fr0").alias(f"Frequência {comparison_label}"),
-        F.col("fr1").alias("Frequência CY"),
-
-        k_ref.alias("k LY" if comparison == "PY" else "k Budget"),
-        k_cy.alias("k CY"),
-    )
+        names = sorted(f for f in os.listdir(SRC_DIR) if f.lower().endswith(".xlsx") and not f.startswith("~$"))
+    plan, errors = [], []
+    for f in names:
+        try:
+            y, m = reference_month(f)
+            plan.append((f, y, m))
+        except ValueError as e:
+            errors.append(f"{f}: {e}")
+    seen = {}
+    for f, y, m in plan:
+        seen.setdefault((y, m), []).append(f)
+    errors += [f"{y}-{m:02d} repetido em: {', '.join(fs)}" for (y, m), fs in seen.items() if len(fs) > 1]
+    if errors:
+        raise ValueError("Problemas nos nomes dos ficheiros:\n  " + "\n  ".join(errors))
+    return sorted(plan, key=lambda x: (x[1], x[2]))
 
 
-def write_bridge(spark, sdf, table_name):
-    """Cria ou substitui uma tabela Delta com os dados da ponte."""
+def get_sheet(wb):
+    actual = {n.strip().lower(): n for n in wb.sheetnames}
+    if SHEET_NAME.strip().lower() not in actual:
+        raise ValueError(f"Sheet '{SHEET_NAME}' não encontrada. Existentes: {wb.sheetnames}")
+    return wb[actual[SHEET_NAME.strip().lower()]]
 
-    def quote_identifier(name):
-        return "`" + name.replace("`", "``") + "`"
 
-    spark.sql(f"DROP TABLE IF EXISTS {table_name}")
+def period_columns(year, month):
+    """[(índice_da_coluna, período)] segundo PERIOD_BLOCKS."""
+    yy = year % 100
+    f = dict(yy=f"{yy:02d}", y1=f"{(yy - 1) % 100:02d}", y2=f"{(yy - 2) % 100:02d}",
+             y3=f"{(yy - 3) % 100:02d}", mm=f"{month:02d}")
+    out = []
+    for first, last, fmt in PERIOD_BLOCKS:
+        for c in range(column_index_from_string(first), column_index_from_string(last) + 1):
+            out.append((c, fmt.format(**f)))
+    for col, fmt, _ in EXTRA_COLUMNS:
+        out.append((column_index_from_string(col), fmt.format(**f)))
+    return out
 
-    column_types = {
-        "suk_month": "INT",
-        "brand_details": "STRING",
-    }
 
-    ddl_columns = ", ".join(
-        f"{quote_identifier(name)} {column_types.get(name, 'DOUBLE')}"
-        for name in sdf.columns
-    )
+def column_brand(ws, c):
+    """brand_details de uma coluna: a forçada em EXTRA_COLUMNS, senão a da linha 3."""
+    for col, _, brand in EXTRA_COLUMNS:
+        if column_index_from_string(col) == c:
+            return brand
+    return norm(ws.cell(HEADER_ROW, c).value)
 
+
+def period_label(period, suk_month):
+    """FY.. e B.. ficam como estão; "MM YY" passa a CY (ano do ficheiro) ou PY (ano anterior)."""
+    if "FY" in period or "B" in period:
+        return period
+    return "CY" if period[-2:] == f"{(suk_month // 100) % 100:02d}" else "PY"
+
+
+def upsert_month(spark, table, fields, rows, suk_month):
+    """Cria a tabela se não existir, acrescenta colunas novas, apaga o mês e insere de novo.
+    Os outros meses ficam intactos, por isso podes carregar um ficheiro de cada vez."""
+    from pyspark.sql import types as T
+
+    def q(c):  # nome de coluna entre backticks
+        return "`" + c.replace("`", "``") + "`"
+
+    tmap = {"STRING": T.StringType(), "INT": T.IntegerType(), "DOUBLE": T.DoubleType()}
+    schema = T.StructType([T.StructField(n, tmap[t]) for n, t in fields])
+    sdf = spark.createDataFrame(rows, schema=schema)
+
+    # Nomes com espaços, '#', ',' ... exigem column mapping: define-se na própria tabela
+    # (funciona também em serverless, onde não se podem alterar configs do Spark).
+    ddl_cols = ", ".join(f"{q(n)} {t}" for n, t in fields)
     spark.sql(
-        f"CREATE TABLE {table_name} ({ddl_columns}) USING DELTA "
+        f"CREATE TABLE IF NOT EXISTS {table} ({ddl_cols}) USING DELTA "
         "TBLPROPERTIES ('delta.columnMapping.mode' = 'name', "
         "'delta.minReaderVersion' = '2', 'delta.minWriterVersion' = '5')"
     )
+    existing = {c.lower() for c in spark.table(table).columns}
+    new_cols = [(n, t) for n, t in fields if n.lower() not in existing]
+    if new_cols:
+        spark.sql(f"ALTER TABLE {table} ADD COLUMNS (" + ", ".join(f"{q(n)} {t}" for n, t in new_cols) + ")")
 
-    sdf.write.format("delta").mode("append").saveAsTable(table_name)
-    print(f"{sdf.count()} linhas inseridas em {table_name}")
-
-
-def run_bridge(spark):
-    if not spark.catalog.tableExists(TABLE_RAW):
-        raise ValueError(f"Tabela raw não encontrada: {TABLE_RAW}")
-
-    raw = spark.table(TABLE_RAW)
-
-    required = [
-        "# Claims of Total YTD", "Frequency of Total YTD", "Claims Charge of Total YTD",
-        "Claims Charge of IBNR YTD", "Earned Premiums YTD", "Gross LR Total cy", "Gross LR IBNR",
-    ]
-    missing = [c for c in required if c not in raw.columns]
-    if missing:
-        raise ValueError(f"A raw não tem as colunas {missing}. Corre primeiro o script principal.")
-
-    # As duas pontes são reconstruídas em cada execução a partir da raw.
-    write_bridge(spark, build_bridge(raw, "PY"), TABLE_BRIDGE)
-    write_bridge(spark, build_bridge(raw, "BUDGET"), TABLE_BRIDGE_MYB)
+    spark.sql(f"DELETE FROM {table} WHERE suk_month = {int(suk_month)}")
+    sdf.write.format("delta").mode("append").saveAsTable(table)
+    print(f"{sdf.count()} linhas inseridas em {table} (suk_month = {suk_month})")
 
 
-if "spark" in globals():  # Só corre dentro do Databricks.
-    run_bridge(spark)
+# ═══════════════════════════════════════════════════════════════════════════
+# PARTE 1 — RAW (todas as métricas em colunas)
+#   brand_details = linha 3 | period = bloco de colunas | métricas = linhas da coluna B:
+#   Portfolio, Inflows YTD / Earned Premiums YTD (x 1000), "<linha> of <bloco> YTD",
+#   "# Claims Month of <bloco>", Gross LR *, e as EXTRA_ROWS (ex.: Claims Charge py, Average Cost (€) f/f)
+# ═══════════════════════════════════════════════════════════════════════════
+def select_rows(ws):
+    """Devolve {nome_da_coluna: nº_da_linha} para as linhas a incorporar na raw."""
+    lc = column_index_from_string(LABEL_COL)
+    labels = {r: norm(ws.cell(r, lc).value) for r in range(FIRST_DATA_ROW, ws.max_row + 1)}
+
+    def section_of(row):
+        # bloco = primeira linha acima que não é uma métrica do bloco nem um Gross LR
+        # (ex.: "# Claims" na linha 11 -> bloco "Crash, Collision or Rollover" na linha 10)
+        for r in range(row - 1, FIRST_DATA_ROW - 1, -1):
+            lab = labels.get(r, "")
+            if lab and _key(lab) not in BLOCK_METRICS | {"# claims month"} and not lab.lower().startswith("gross lr"):
+                return lab
+        return ""
+
+    picked, gross = [], []
+    for r, lab in labels.items():
+        if not lab:
+            continue
+        low = lab.lower()
+        if low in YTD_ROWS:
+            picked.append((lab + YTD_SUFFIX, r))
+        elif low in EXTRA_ROWS:
+            picked.append((EXTRA_ROWS[low], r))
+        elif low in SIMPLE_ROWS or "ytd" in low:
+            picked.append((lab, r))
+        elif CLAIMS_MONTH_RE.match(lab):
+            picked.append((f"# Claims Month of {labels.get(r - 2, '')}".strip(), r))
+        elif _key(lab) in BLOCK_METRICS:
+            picked.append((f"{lab} of {section_of(r)}{YTD_SUFFIX}", r))
+        elif low.startswith("gross lr"):
+            gross.append((lab, r))
+
+    # Gross LR*: nome repetido entre blocos -> desambigua com o nome do bloco
+    counts = {}
+    for lab, _ in gross:
+        counts[lab] = counts.get(lab, 0) + 1
+    for lab, r in gross:
+        picked.append((f"{lab} of {section_of(r)}" if counts[lab] > 1 else lab, r))
+
+    cols = {}
+    for name, r in sorted(picked, key=lambda x: x[1]):
+        if name in cols:
+            raise ValueError(f"Nome de coluna duplicado '{name}' (linhas {cols[name]} e {r})")
+        cols[name] = r
+    return cols
+
+
+def parse_raw(ws, year, month):
+    """Sheet -> (lista de dicts: 1 por coluna de dados, métricas em colunas; nomes das métricas)."""
+    rows = select_rows(ws)
+    suk_month = year * 100 + month
+    out = []
+    for c, period in period_columns(year, month):
+        brand = column_brand(ws, c)
+        if not brand:
+            continue
+        rec = {"suk_month": suk_month, "brand_details": BRAND_MAP.get(brand, brand), "period": period}
+        for name, r in rows.items():
+            val = to_number(ws.cell(r, c).value)
+            if val is not None and (
+                (name.endswith(YTD_SUFFIX) and name[:-len(YTD_SUFFIX)].lower() in YTD_ROWS)
+                or name.lower().startswith("claims charge")   # Claims Charge também ×1000
+            ):
+                val = val * YTD_FACTOR
+            rec[name] = val
+        if SKIP_EMPTY_MONTHS and all(rec[n] is None for n in rows):
+            continue
+        out.append(rec)
+    return out, list(rows)
+
+
+def run_raw(spark, recs, cols, year, month):
+    suk_month = year * 100 + month
+    print(f"[1 raw] suk_month = {suk_month}: {len(recs)} colunas de dados, {len(cols)} métricas")
+    fields = [("suk_month", "INT"), ("brand_details", "STRING"), ("period", "STRING")] + [(c, "DOUBLE") for c in cols]
+    rows = [[r["suk_month"], r["brand_details"], r["period"]] + [r[c] for c in cols] for r in recs]
+    upsert_month(spark, TABLE_RAW, fields, rows, suk_month)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PARTE 2 — CORE POR COBERTURA
+#   Colunas: suk_month, brand_details, period (FY.., B.., CY, PY), coverage,
+#   "# Claims" (da linha "# Claims Month"), "# Claims YTD" (da linha "# Claims"),
+#   "Frequency", "Average Cost", "Gross LR". As coberturas de COVERAGE_EXCLUDE ficam de fora.
+# ═══════════════════════════════════════════════════════════════════════════
+COVERAGE_METRICS = {"# claims month": "# Claims", "# claims": "# Claims YTD",
+                    "frequency": "Frequency", "average cost (€)": "Average Cost"}
+COVERAGE_COLS = ["# Claims", "# Claims YTD", "Frequency", "Average Cost", "Gross LR"]
+
+
+def coverage_blocks(ws):
+    """[(cobertura, {coluna: nº_da_linha})]: um bloco começa numa linha-título seguida de '# Claims'
+    (ou 'Claims Charge') e acaba na primeira linha que já não é métrica nem Gross LR."""
+    lc = column_index_from_string(LABEL_COL)
+    last = ws.max_row
+    labels = {r: norm(ws.cell(r, lc).value) for r in range(FIRST_DATA_ROW, last + 2)}
+    exclude = {x.strip().lower() for x in COVERAGE_EXCLUDE}
+    blocks = []
+    for r in range(FIRST_DATA_ROW, last + 1):
+        lab = labels[r]
+        if not lab or _key(lab) in BLOCK_METRICS | {"# claims month"} or lab.lower().startswith("gross lr"):
+            continue
+        if _key(labels.get(r + 1, "")) not in BLOCK_METRICS:
+            continue
+        rows = {}
+        for k in range(r + 1, last + 1):
+            l = labels.get(k, "")
+            if not l:
+                continue
+            if _key(l) in COVERAGE_METRICS:
+                rows.setdefault(COVERAGE_METRICS[_key(l)], k)
+            elif _key(l) in BLOCK_METRICS:  # ex.: Claims Charge, não vai para esta tabela
+                continue
+            elif l.lower().startswith("gross lr"):
+                rows.setdefault("Gross LR", k)
+            else:
+                break
+        if lab.lower() not in exclude:
+            blocks.append((lab, rows))
+    return blocks
+
+
+def parse_coverage(ws, year, month):
+    blocks = coverage_blocks(ws)
+    suk_month = year * 100 + month
+    out = []
+    for c, period in period_columns(year, month):
+        brand = column_brand(ws, c)
+        if not brand:
+            continue
+        brand = BRAND_MAP.get(brand, brand)
+        for cov, rows in blocks:
+            rec = {"suk_month": suk_month, "brand_details": brand,
+                   "period": period_label(period, suk_month), "coverage": cov}
+            for col in COVERAGE_COLS:
+                rec[col] = to_number(ws.cell(rows[col], c).value) if col in rows else None
+            if SKIP_EMPTY_MONTHS and all(rec[col] is None for col in COVERAGE_COLS):
+                continue
+            out.append(rec)
+    return out
+
+
+def run_coverage(spark, recs, year, month):
+    suk_month = year * 100 + month
+    print(f"[2 cobertura] suk_month = {suk_month}: {len(recs)} linhas")
+    fields = [("suk_month", "INT"), ("brand_details", "STRING"), ("period", "STRING"), ("coverage", "STRING")] \
+        + [(c, "DOUBLE") for c in COVERAGE_COLS]
+    rows = [[r["suk_month"], r["brand_details"], r["period"], r["coverage"]] + [r[c] for c in COVERAGE_COLS]
+            for r in recs]
+    upsert_month(spark, TABLE_COVERAGE, fields, rows, suk_month)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PARTE 3 — CORE DE PRÉMIOS (lê a tabela raw e reconstrói-se com todos os meses)
+#   meses                     = FY.. e B.. = 12; "MM YY" = MM (ex.: "08 26" -> 8)
+#   "Average Premium Inflows" = Inflows YTD / meses * 12 / Portfolio
+#   "Average Premium Earned"  = Earned Premiums YTD / meses * 12 / Portfolio
+#   "Earned Premium / Inflows"= Average Premium Earned / Average Premium Inflows
+#   + Claims Charge cy / py / ay YTD (da raw, já ×1000) e os Gross LR de INFLOWS_EXTRA_COLS.
+#   Divisões por zero ou por valores vazios ficam a null. period: FY.., B.., CY ou PY.
+# ═══════════════════════════════════════════════════════════════════════════
+def build_inflows(raw):
+    from pyspark.sql import functions as F
+
+    period = F.col("period")
+    # "FY 25" e "B26" são anos completos (12 meses); "08 26" e "B26 YTD" são os primeiros 8 meses
+    # "B26 YTD" (orçamento acumulado) usa o mês do suk_month
+    meses = (F.when(period.rlike("^[0-9]{2} "), F.substring(period, 1, 2).cast("int"))
+              .when(period.rlike("^B[0-9]{2} YTD$"), F.col("suk_month").cast("int") % 100)
+              .otherwise(F.lit(12)))
+    # FY.. e B.. ficam como estão; "MM YY" -> CY (mesmo ano do suk_month) ou PY
+    year2 = F.substring(F.col("suk_month").cast("string"), 3, 2)
+    period_out = (F.when(period.contains("FY"), period)
+                   .when(period.contains("B"), period)
+                   .when(F.regexp_extract(period, "([0-9]{2})$", 1) == year2, F.lit("CY"))
+                   .otherwise(F.lit("PY")))
+
+    inflows = F.col("Inflows YTD").cast("double")
+    earned = F.col("Earned Premiums YTD").cast("double")
+    port = F.col("Portfolio").cast("double")
+
+    # só divide quando a carteira não é zero/nula
+    avg_inf = F.when(port != 0, inflows / meses * 12 / port)
+    avg_earn = F.when(port != 0, earned / meses * 12 / port)
+    ratio = F.when(avg_inf != 0, avg_earn / avg_inf)
+
+    return raw.select(
+        F.col("suk_month").cast("int").alias("suk_month"),
+        F.col("brand_details"),
+        period_out.alias("period"),
+        inflows.alias("Inflows YTD"),
+        port.alias("Portfolio"),
+        earned.alias("Earned Premiums YTD"),
+        avg_inf.alias("Average Premium Inflows"),
+        avg_earn.alias("Average Premium Earned"),
+        ratio.alias("Earned Premium / Inflows"),
+        *[F.col(src).cast("double").alias(out) for out, src in INFLOWS_CLAIMS_COLS],
+        *[F.col(c).cast("double").alias(c) for c in INFLOWS_EXTRA_COLS],
+    )
+
+
+def run_inflows(spark):
+    def q(c):
+        return "`" + c.replace("`", "``") + "`"
+
+    out_cols = [
+        ("suk_month", "INT"), ("brand_details", "STRING"), ("period", "STRING"),
+        ("Inflows YTD", "DOUBLE"), ("Portfolio", "DOUBLE"), ("Earned Premiums YTD", "DOUBLE"),
+        ("Average Premium Inflows", "DOUBLE"), ("Average Premium Earned", "DOUBLE"),
+        ("Earned Premium / Inflows", "DOUBLE"),
+    ] + [(out, "DOUBLE") for out, _ in INFLOWS_CLAIMS_COLS] + [(c, "DOUBLE") for c in INFLOWS_EXTRA_COLS]
+
+    sdf = build_inflows(spark.table(TABLE_RAW))
+    spark.sql(f"DROP TABLE IF EXISTS {TABLE_INFLOWS}")
+    ddl_cols = ", ".join(f"{q(n)} {t}" for n, t in out_cols)
+    # nomes com espaços e '/' exigem column mapping (definido na própria tabela)
+    spark.sql(
+        f"CREATE TABLE {TABLE_INFLOWS} ({ddl_cols}) USING DELTA "
+        "TBLPROPERTIES ('delta.columnMapping.mode' = 'name', "
+        "'delta.minReaderVersion' = '2', 'delta.minWriterVersion' = '5')"
+    )
+    sdf.write.format("delta").mode("append").saveAsTable(TABLE_INFLOWS)
+    print(f"[3 prémios] {sdf.count()} linhas inseridas em {TABLE_INFLOWS}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# EXECUÇÃO: 1) lê e valida todos os ficheiros  2) apaga as tabelas  3) carrega tudo  4) parte 3
+# ═══════════════════════════════════════════════════════════════════════════
+def main():
+    plan = build_plan()
+    print(f"{len(plan)} ficheiros em {SRC_DIR}:")
+    for f, y, m in plan:
+        print(f"  {y * 100 + m}  {f}")
+
+    # 1) leitura e validação (ainda sem tocar nas tabelas)
+    loaded, errors = [], []
+    if RUN_RAW or RUN_COVERAGE:
+        for f, y, m in plan:
+            try:
+                wb = load_workbook(os.path.join(SRC_DIR, f), data_only=True, read_only=False)
+                try:
+                    ws = get_sheet(wb)
+                    raw = parse_raw(ws, y, m) if RUN_RAW else None
+                    cov = parse_coverage(ws, y, m) if RUN_COVERAGE else None
+                finally:
+                    wb.close()
+                loaded.append((y, m, raw, cov))
+            except Exception as e:  # noqa: BLE001
+                errors.append(f"{f}: {e}")
+        if errors:
+            raise ValueError("Erros na leitura (as tabelas não foram alteradas):\n  " + "\n  ".join(errors))
+
+    # 2) apaga as tabelas (a parte 3 apaga-se e recria-se sozinha)
+    if RESET_TABLES:
+        if RUN_RAW:
+            spark.sql(f"DROP TABLE IF EXISTS {TABLE_RAW}")
+        if RUN_COVERAGE:
+            spark.sql(f"DROP TABLE IF EXISTS {TABLE_COVERAGE}")
+
+    # 3) carrega um mês de cada vez, do mais antigo para o mais recente
+    for y, m, raw, cov in loaded:
+        if RUN_RAW:
+            run_raw(spark, raw[0], raw[1], y, m)  # `spark` existe nos notebooks Databricks
+        if RUN_COVERAGE:
+            run_coverage(spark, cov, y, m)
+
+    # 4) prémios (lê a raw)
+    if RUN_INFLOWS:
+        run_inflows(spark)
+
+
+if "spark" in globals():  # só corre dentro do Databricks
+    main()
