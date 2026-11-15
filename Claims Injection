@@ -12,8 +12,10 @@ Injeta o Template_Claims.xlsx (1 ou mais sheets) numa tabela Delta no Databricks
     * qualquer linha com "YTD" no nome
 - Cada execução apaga a tabela de destino e cria-a de novo só com o que está no Excel.
 """
+import os
 import re
 import datetime as dt
+import unicodedata
 import sys
 import subprocess
 import importlib
@@ -192,6 +194,54 @@ def read_workbook(path):
     return result
 
 
+# ───────────────────────── LOCALIZAR O FICHEIRO ─────────────────────────
+def _canon(name):
+    """Nome comparável: sem diferenças de maiúsculas, espaços repetidos/não separáveis ou acentos decompostos."""
+    n = unicodedata.normalize("NFC", name).replace("\u00a0", " ")
+    return re.sub(r"\s+", " ", n).strip().lower()
+
+
+def resolve_excel_path(path):
+    """Devolve o caminho do Excel. Se o caminho exato não existir, procura o ficheiro com o nome
+    equivalente na pasta e, em último caso, no volume todo; se não o encontrar, diz o que existe."""
+    if os.path.isfile(path):
+        return path
+    folder, fname = os.path.dirname(path), os.path.basename(path)
+
+    if os.path.isdir(folder):
+        files = sorted(os.listdir(folder))
+        for f in files:
+            if _canon(f) == _canon(fname):
+                print(f"Ficheiro encontrado com nome ligeiramente diferente: {f!r}")
+                return os.path.join(folder, f)
+    else:
+        files = None
+
+    # procura no volume todo
+    volume_root = "/" + "/".join(p.strip("/") for p in ["Volumes", SRC_CATALOG, SRC_SCHEMA, SRC_VOLUME])
+    found = []
+    for root, _dirs, names in os.walk(volume_root):
+        found += [os.path.join(root, f) for f in names if _canon(f) == _canon(fname)]
+    if len(found) == 1:
+        print(f"Ficheiro não está em {folder}; encontrado em {found[0]} (corrige SRC_FOLDER).")
+        return found[0]
+
+    msg = [f"Ficheiro não encontrado: {path}"]
+    if files is not None:
+        msg.append(f"Ficheiros em {folder}:")
+        msg += [f"  {f!r}" for f in files]
+    else:
+        parent = folder
+        while parent and not os.path.isdir(parent):
+            parent = os.path.dirname(parent)
+        msg.append(f"A pasta {folder} não existe. Última pasta que existe: {parent or '/'}")
+        msg.append("Conteúdo:")
+        msg += [f"  {f!r}" for f in sorted(os.listdir(parent or "/"))]
+    if len(found) > 1:
+        msg.append("Há vários ficheiros com esse nome no volume: " + ", ".join(found))
+    raise FileNotFoundError("\n".join(msg))
+
+
 # ───────────────────────── DATABRICKS ─────────────────────────
 def write_to_delta(spark, parsed):
     from pyspark.sql import types as T
@@ -228,7 +278,7 @@ def write_to_delta(spark, parsed):
 
 
 def main():
-    parsed = read_workbook(EXCEL_PATH)
+    parsed = read_workbook(resolve_excel_path(EXCEL_PATH))
     for b, (recs, cols) in parsed.items():
         print(f"{b}: {len(recs)} meses, {len(cols)} métricas")
     write_to_delta(spark, parsed)  # `spark` existe nos notebooks Databricks
