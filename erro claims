@@ -1,5 +1,4 @@
-FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/budget/Claims drivers - budget 2026_mes.xlsx'
-
-
-ligação 
-/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/budget/Claims drivers - budget 2026_mes.xlsx
+FileNotFoundError: Ficheiro não encontrado: /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/budget/Claims drivers - budget 2026_mes.xlsx
+A pasta /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/budget não existe. Última pasta que existe: /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw
+Conteúdo:
+  'mount.err'
