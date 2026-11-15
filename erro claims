@@ -1,9 +1,5 @@
-NameError: name 'F' is not defined
-File <command-7163789081694483>, line 288
-    284     write_bridge(spark, budget_bridge, TABLE_BRIDGE_MYB)
-    287 if "spark" in globals():  # Só corre dentro do Databricks.
---> 288     run_bridge(spark)
-File <command-7163789081694483>, line 73, in col(name)
-     71 def col(name):
-     72     """Referencia nomes de colunas com espaços ou caracteres especiais."""
----> 73     return F.col("`" + name.replace("`", "``") + "`")
+FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/budget/Claims drivers - budget 2026_mes.xlsx'
+
+
+ligação 
+/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/budget/Claims drivers - budget 2026_mes.xlsx
