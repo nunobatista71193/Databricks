@@ -1,162 +1,106 @@
-# ═══════════════════════════════════════════════════════════════════════════
-# CORE CLAIMS DRIVERS INFLOWS BUDGET
-# ═══════════════════════════════════════════════════════════════════════════
-
+# -*- coding: utf-8 -*-
+"""
+CORE CLAIMS DRIVERS INFLOWS BUDGET
+Lê raw_claims_drivers_budget_all e cria core_claims_drivers_inflows_budget_all
+(1 linha por suk_month x brand), com os mesmos nomes de colunas da tabela do real.
+Apaga e recria a tabela em cada execução.
+"""
 from pyspark.sql import functions as F
 
-TABLE_RAW_BUDGET = (
-    "agpt_insurance_dv_catalog."
-    "wkb_bus_operations_claimsmotor."
-    "raw_claims_drivers_budget_all"
-)
+CATALOG = "agpt_insurance_dv_catalog"
+SCHEMA = "wkb_bus_operations_claimsmotor"
+TABLE_RAW_BUDGET = f"{CATALOG}.{SCHEMA}.raw_claims_drivers_budget_all"
+TABLE_INFLOWS_BUDGET = f"{CATALOG}.{SCHEMA}.core_claims_drivers_inflows_budget_all"
 
-TABLE_INFLOWS_BUDGET = (
-    "agpt_insurance_dv_catalog."
-    "wkb_bus_operations_claimsmotor."
-    "core_claims_drivers_inflows_budget_all"
-)
+# (nome na tabela de saída, nome da coluna na raw), iguais aos do real
+COPY_COLS = [
+    ("# Claims Total YTD", "# Claims of Total YTD"),
+    ("# Claims Large Claims YTD", "# Claims of Large Claims YTD"),
+    ("# Claims Attritional YTD", "# Claims of Attritional YTD"),
+    ("Claims Charge cy YTD", "Claims Charge of Total YTD"),
+    ("Claims Charge py YTD", "Claims Charge py"),
+    ("Claims Charge ay YTD", "Claims Charge ay"),
+    ("Claims Charge Large Claims YTD", "Claims Charge of Large Claims YTD"),
+    ("Claims Charge Attritional YTD", "Claims Charge of Attritional YTD"),
+    ("Claims Charge IBNR YTD", "Claims Charge of IBNR YTD"),
+    ("Claims Charge IBNER YTD", "Claims Charge of IBNER YTD"),
+    ("Claims Charge IBNR/IBNER YTD", "Claims Charge of IBNR/IBNER YTD"),
+    ("Average Cost (€) f/f", "Average Cost (€) f/f"),
+    ("Gross LR CY f/f", "Gross LR CY f/f"),
+    ("Gross LR Total cy", "Gross LR Total cy"),
+    ("Gross LR Total py", "Gross LR Total py"),
+    ("Gross LR Total ay", "Gross LR Total ay"),
+    ("Gross LR IBNR", "Gross LR IBNR"),
+    ("Gross LR IBNER", "Gross LR IBNER"),
+    ("Gross LR IBNR/IBNER", "Gross LR IBNR/IBNER"),
+]
+
+# Colunas que são obrigatórias para a tabela fazer sentido
+REQUIRED = ["suk_month", "brand", "Inflows YTD", "Portfolio", "Earned Premiums YTD"]
+
+
+def q(name):
+    return "`" + name.replace("`", "``") + "`"
 
 
 def build_inflows_budget(raw):
+    missing = [c for c in REQUIRED if c not in raw.columns]
+    if missing:
+        raise ValueError(
+            f"A raw do budget não tem as colunas {missing}. "
+            "Volta a correr o script da raw do budget (apaga e recria a tabela)."
+        )
 
     inflows = F.col("Inflows YTD").cast("double")
     earned = F.col("Earned Premiums YTD").cast("double")
     portfolio = F.col("Portfolio").cast("double")
 
-    avg_inflows = F.when(
-        portfolio != 0,
-        inflows / portfolio
-    )
+    avg_inflows = F.when(portfolio != 0, inflows / portfolio)
+    avg_earned = F.when(portfolio != 0, earned / portfolio)
+    ratio = F.when(avg_inflows != 0, avg_earned / avg_inflows)
 
-    avg_earned = F.when(
-        portfolio != 0,
-        earned / portfolio
-    )
-
-    ratio = F.when(
-        avg_inflows != 0,
-        avg_earned / avg_inflows
-    )
+    copied, absent = [], []
+    for out, src in COPY_COLS:
+        if src in raw.columns:
+            copied.append(F.col(q(src)).cast("double").alias(out))
+        else:
+            copied.append(F.lit(None).cast("double").alias(out))
+            absent.append(src)
+    if absent:
+        print("Aviso: colunas que não existem na raw (ficam a null):", absent)
 
     return raw.select(
-
         F.col("suk_month").cast("int").alias("suk_month"),
         F.col("brand"),
-
         inflows.alias("Inflows YTD"),
         portfolio.alias("Portfolio"),
         earned.alias("Earned Premiums YTD"),
-
         avg_inflows.alias("Average Premium Inflows"),
         avg_earned.alias("Average Premium Earned"),
         ratio.alias("Earned Premium / Inflows"),
-
-        F.col("# Claims of Total YTD").cast("double")
-            .alias("# Claims Total YTD"),
-
-        F.col("# Claims of Large Claims YTD").cast("double")
-            .alias("# Claims Large Claims YTD"),
-
-        F.col("# Claims of Attritional YTD").cast("double")
-            .alias("# Claims Attritional YTD"),
-
-        F.col("Claims Charge of Total YTD").cast("double")
-            .alias("Claims Charge cy YTD"),
-
-        F.col("Claims Charge of Large Claims YTD").cast("double")
-            .alias("Claims Charge Large Claims YTD"),
-
-        F.col("Claims Charge of Attritional YTD").cast("double")
-            .alias("Claims Charge Attritional YTD"),
-
-        F.col("Claims Charge of IBNR YTD").cast("double")
-            .alias("Claims Charge IBNR YTD"),
-
-        F.col("Claims Charge of IBNER YTD").cast("double")
-            .alias("Claims Charge IBNER YTD"),
-
-        F.col("Claims Charge of IBNR/IBNER YTD").cast("double")
-            .alias("Claims Charge IBNR/IBNER YTD"),
-
-        F.col("Gross LR CY f/f").cast("double")
-            .alias("Gross LR CY f/f"),
-
-        F.col("Gross LR Total cy").cast("double")
-            .alias("Gross LR Total cy"),
-
-        F.col("Gross LR Total py").cast("double")
-            .alias("Gross LR Total py"),
-
-        F.col("Gross LR Total ay").cast("double")
-            .alias("Gross LR Total ay"),
-
-        F.col("Gross LR IBNR").cast("double")
-            .alias("Gross LR IBNR"),
-
-        F.col("Gross LR IBNER").cast("double")
-            .alias("Gross LR IBNER"),
-
-        F.col("Gross LR IBNR/IBNER").cast("double")
-            .alias("Gross LR IBNR/IBNER")
-
+        *copied,
     )
 
 
-df = build_inflows_budget(
-    spark.table(TABLE_RAW_BUDGET)
-)
+def run():
+    if not spark.catalog.tableExists(TABLE_RAW_BUDGET):
+        raise ValueError(f"Tabela raw não encontrada: {TABLE_RAW_BUDGET}")
 
-spark.sql(f"DROP TABLE IF EXISTS {TABLE_INFLOWS_BUDGET}")
+    df = build_inflows_budget(spark.table(TABLE_RAW_BUDGET))
 
-spark.sql(f"""
-CREATE TABLE {TABLE_INFLOWS_BUDGET}
-(
-    `suk_month` INT,
-    `brand` STRING,
+    spark.sql(f"DROP TABLE IF EXISTS {TABLE_INFLOWS_BUDGET}")
+    cols = [("suk_month", "INT"), ("brand", "STRING")] + [
+        (n, "DOUBLE") for n in df.columns if n not in ("suk_month", "brand")
+    ]
+    ddl = ", ".join(f"{q(n)} {t}" for n, t in cols)
+    spark.sql(
+        f"CREATE TABLE {TABLE_INFLOWS_BUDGET} ({ddl}) USING DELTA "
+        "TBLPROPERTIES ('delta.columnMapping.mode' = 'name', "
+        "'delta.minReaderVersion' = '2', 'delta.minWriterVersion' = '5')"
+    )
+    df.write.format("delta").mode("append").saveAsTable(TABLE_INFLOWS_BUDGET)
+    print(f"{df.count()} linhas carregadas em {TABLE_INFLOWS_BUDGET}")
 
-    `Inflows YTD` DOUBLE,
-    `Portfolio` DOUBLE,
-    `Earned Premiums YTD` DOUBLE,
 
-    `Average Premium Inflows` DOUBLE,
-    `Average Premium Earned` DOUBLE,
-    `Earned Premium / Inflows` DOUBLE,
-
-    `# Claims Total YTD` DOUBLE,
-    `# Claims Large Claims YTD` DOUBLE,
-    `# Claims Attritional YTD` DOUBLE,
-
-    `Claims Charge cy YTD` DOUBLE,
-    `Claims Charge Large Claims YTD` DOUBLE,
-    `Claims Charge Attritional YTD` DOUBLE,
-
-    `Claims Charge IBNR YTD` DOUBLE,
-    `Claims Charge IBNER YTD` DOUBLE,
-    `Claims Charge IBNR/IBNER YTD` DOUBLE,
-
-    `Gross LR CY f/f` DOUBLE,
-    `Gross LR Total cy` DOUBLE,
-    `Gross LR Total py` DOUBLE,
-    `Gross LR Total ay` DOUBLE,
-    `Gross LR IBNR` DOUBLE,
-    `Gross LR IBNER` DOUBLE,
-    `Gross LR IBNR/IBNER` DOUBLE
-)
-USING DELTA
-TBLPROPERTIES (
-    'delta.columnMapping.mode' = 'name',
-    'delta.minReaderVersion' = '2',
-    'delta.minWriterVersion' = '5'
-)
-""")
-
-(
-    df.write
-      .format("delta")
-      .mode("append")
-      .saveAsTable(TABLE_INFLOWS_BUDGET)
-)
-
-print(
-    f"{df.count()} linhas carregadas em {TABLE_INFLOWS_BUDGET}"
-)
+if "spark" in globals():  # só corre dentro do Databricks
+    run()
