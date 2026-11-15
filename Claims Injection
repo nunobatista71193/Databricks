@@ -1,1 +1,215 @@
-print(open("/Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/mount.err").read())
+# -*- coding: utf-8 -*-
+"""
+SCRIPT 2 de 2 — tabela CORE por cobertura (1 linha por brand x mês x cobertura).
+Corre depois do script 1. Lê o mesmo Excel e é independente: pode ser corrido sozinho.
+
+Colunas: suk_month, brand, coverage, "# Claims" (da linha "# Claims Month"),
+"# Claims YTD" (da linha "# Claims"), "Frequency", "Average Cost", "Gross LR".
+Cada execução apaga a tabela de destino e cria-a de novo.
+"""
+import re
+import datetime as dt
+import sys
+import subprocess
+import importlib
+
+try:
+    import openpyxl  # noqa: F401
+except ModuleNotFoundError:  # cluster sem openpyxl: instala e continua
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "openpyxl"])
+    importlib.invalidate_caches()
+
+from openpyxl import load_workbook
+from openpyxl.utils import column_index_from_string, get_column_letter
+
+# ───────────────────────── CONFIGURAÇÃO ─────────────────────────
+# Origem: ficheiro Excel num Volume do Unity Catalog
+SRC_CATALOG = "agpt_insurance_dv_catalog"
+SRC_SCHEMA  = "wkb_bus_operations_claimsmotor"
+SRC_VOLUME  = "pba&uw"
+SRC_FOLDER  = "01_raw/claims_drivers"   # pasta dentro do volume ("" se estiver na raiz)
+SRC_FILE    = "Claims drivers - budget 2026_mes.xlsx"
+
+# Destino: tabela Delta
+TGT_CATALOG = "agpt_insurance_dv_catalog"
+TGT_SCHEMA  = "wkb_bus_operations_claimsmotor"
+TGT_TABLE_COVERAGE   = "core_claims_drivers_coverage_budget_all"
+
+EXCEL_PATH   = "/" + "/".join(p.strip("/") for p in
+                              ["Volumes", SRC_CATALOG, SRC_SCHEMA, SRC_VOLUME, SRC_FOLDER, SRC_FILE] if p)
+TARGET_TABLE_COVERAGE = f"{TGT_CATALOG}.{TGT_SCHEMA}.{TGT_TABLE_COVERAGE}"
+
+LABEL_COL      = "D"    # coluna com os nomes das linhas
+FIRST_MONTH_COL = "AE"  # primeira coluna de meses
+LAST_MONTH_COL  = "AP"  # última coluna de meses
+HEADER_ROW     = 3      # linha com as datas (Jan/26, ...)
+FIRST_DATA_ROW = 4
+
+# Sheet -> brand. Só as sheets listadas aqui são carregadas.
+# Se deixares o dicionário vazio ({}), carrega todas as sheets e usa o nome da sheet como brand.
+SHEET_TO_BRAND = {
+    "Motor ags ND": "AGS",
+    "Motor sd": "SD",
+    "Motor ocs": "OCS",
+}
+# Sheet -> brand. Só as sheets listadas aqui são carregadas.
+# Se deixares o dicionário vazio ({}), carrega todas as sheets e usa o nome da sheet como brand.
+SHEET_TO_BRAND = {
+    "Motor ags ND": "AGS",
+    "Motor sd": "SD",
+    "Motor ocs": "OCS",
+}
+SKIP_EMPTY_MONTHS = True  # ignora meses em que todas as métricas estão vazias
+# ────────────────────────────────────────────────────────────────
+
+_MONTHS = {"jan": 1, "fev": 2, "feb": 2, "mar": 3, "abr": 4, "apr": 4, "mai": 5, "may": 5,
+           "jun": 6, "jul": 7, "ago": 8, "aug": 8, "set": 9, "sep": 9, "out": 10, "oct": 10,
+           "nov": 11, "dez": 12, "dec": 12}
+
+SIMPLE_ROWS = {"portfolio", "portfólio", "inflows", "earned premiums"}
+CLAIMS_MONTH_RE = re.compile(r"^#\s*claims\s*month$", re.I)
+CLAIMS_RE = re.compile(r"^#\s*claims$", re.I)
+# Linhas de cada bloco que passam a "<linha> of <bloco> YTD"
+BLOCK_METRICS = {"# claims", "frequency", "average cost (€)", "claims charge"}
+
+
+def norm(v):
+    """Texto limpo: sem espaços repetidos nem nas pontas."""
+    return re.sub(r"\s+", " ", str(v)).strip() if v is not None else ""
+
+
+def to_suk_month(v):
+    """datetime / 'Jan/26' / 'jan-2026' / 202601 -> 202601 (int)."""
+    if isinstance(v, (dt.datetime, dt.date)):
+        return v.year * 100 + v.month
+    if isinstance(v, (int, float)) and 190001 <= int(v) <= 299912:
+        return int(v)
+    m = re.match(r"^\s*([A-Za-zçÇ]{3})[a-z]*[\s/\-\.]+(\d{2}|\d{4})\s*$", str(v))
+    if m and m.group(1).lower() in _MONTHS:
+        y = int(m.group(2))
+        y = y + 2000 if y < 100 else y
+        return y * 100 + _MONTHS[m.group(1).lower()]
+    raise ValueError(f"Não consegui interpretar o mês: {v!r}")
+
+
+def to_number(v):
+    if v is None or isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    try:
+        return float(str(v).replace(" ", "").replace(" ", "").replace(",", "."))
+    except ValueError:
+        return None  # #DIV/0!, #N/A, texto...
+
+
+# ───────────────── TABELA POR COBERTURA ─────────────────
+COVERAGE_METRICS = {"# claims month": "# Claims", "# claims": "# Claims YTD",
+                    "frequency": "Frequency", "average cost (€)": "Average Cost"}
+COVERAGE_COLS = ["# Claims", "# Claims YTD", "Frequency", "Average Cost", "Gross LR"]
+
+
+def _key(label):
+    return re.sub(r"^#\s*", "# ", label.lower())
+
+
+def coverage_blocks(ws):
+    """[(cobertura, {coluna: nº_da_linha})]: um bloco começa numa linha-título seguida de '# Claims'
+    (ou 'Claims Charge') e acaba na primeira linha que já não é métrica nem Gross LR."""
+    lc = column_index_from_string(LABEL_COL)
+    last = ws.max_row
+    labels = {r: norm(ws.cell(r, lc).value) for r in range(FIRST_DATA_ROW, last + 2)}
+    blocks = []
+    for r in range(FIRST_DATA_ROW, last + 1):
+        lab = labels[r]
+        if not lab or _key(lab) in BLOCK_METRICS | {"# claims month"} or lab.lower().startswith("gross lr"):
+            continue
+        if _key(labels.get(r + 1, "")) not in BLOCK_METRICS:
+            continue
+        rows = {}
+        for k in range(r + 1, last + 1):
+            l = labels.get(k, "")
+            if not l:
+                continue
+            if _key(l) in COVERAGE_METRICS:
+                rows.setdefault(COVERAGE_METRICS[_key(l)], k)
+            elif _key(l) in BLOCK_METRICS:  # ex.: Claims Charge, não vai para esta tabela
+                continue
+            elif l.lower().startswith("gross lr"):
+                rows.setdefault("Gross LR", k)
+            else:
+                break
+        blocks.append((lab, rows))
+    return blocks
+
+
+def parse_coverage(ws, brand):
+    blocks = coverage_blocks(ws)
+    c1 = column_index_from_string(FIRST_MONTH_COL)
+    c2 = column_index_from_string(LAST_MONTH_COL)
+    out = []
+    for c in range(c1, c2 + 1):
+        head = ws.cell(HEADER_ROW, c).value
+        if head is None:
+            continue
+        month = to_suk_month(head)
+        for cov, rows in blocks:
+            rec = {"suk_month": month, "brand": brand, "coverage": cov}
+            for col in COVERAGE_COLS:
+                rec[col] = to_number(ws.cell(rows[col], c).value) if col in rows else None
+            if SKIP_EMPTY_MONTHS and all(rec[col] is None for col in COVERAGE_COLS):
+                continue
+            out.append(rec)
+    return out
+
+
+def read_coverage(path):
+    """Devolve a lista de registos da tabela por cobertura (todas as sheets configuradas)."""
+    wb = load_workbook(path, data_only=True, read_only=False)
+    actual = {n.strip().lower(): n for n in wb.sheetnames}
+    out = []
+    for name in (list(SHEET_TO_BRAND) or wb.sheetnames):
+        brand = SHEET_TO_BRAND.get(name, name)
+        out += parse_coverage(wb[actual[name.strip().lower()]], brand)
+    return out
+
+
+# ───────────────────────── DATABRICKS ─────────────────────────
+def recreate_table(spark, table, fields, rows):
+    """Apaga a tabela e cria-a de novo com `fields` [(nome, 'STRING'|'INT'|'DOUBLE')] e `rows`."""
+    from pyspark.sql import types as T
+
+    def q(c):  # nome de coluna entre backticks
+        return "`" + c.replace("`", "``") + "`"
+
+    tmap = {"STRING": T.StringType(), "INT": T.IntegerType(), "DOUBLE": T.DoubleType()}
+    schema = T.StructType([T.StructField(n, tmap[t]) for n, t in fields])
+    sdf = spark.createDataFrame(rows, schema=schema)
+
+    spark.sql(f"DROP TABLE IF EXISTS {table}")
+    # Nomes com espaços, '#', ',' ... exigem column mapping: define-se na própria tabela
+    # (funciona também em serverless, onde não se podem alterar configs do Spark).
+    ddl_cols = ", ".join(f"{q(n)} {t}" for n, t in fields)
+    spark.sql(
+        f"CREATE TABLE {table} ({ddl_cols}) USING DELTA "
+        "TBLPROPERTIES ('delta.columnMapping.mode' = 'name', "
+        "'delta.minReaderVersion' = '2', 'delta.minWriterVersion' = '5')"
+    )
+    sdf.write.format("delta").mode("append").saveAsTable(table)
+    print(f"{sdf.count()} linhas inseridas em {table}")
+
+
+def write_coverage(spark, records):
+    fields = [("suk_month", "INT"), ("brand", "STRING"), ("coverage", "STRING")] + [(c, "DOUBLE") for c in COVERAGE_COLS]
+    rows = [[r["suk_month"], r["brand"], r["coverage"]] + [r[c] for c in COVERAGE_COLS] for r in records]
+    recreate_table(spark, TARGET_TABLE_COVERAGE, fields, rows)
+
+
+def main():
+    coverage = read_coverage(EXCEL_PATH)
+    print(f"Cobertura: {len(coverage)} linhas")
+    write_coverage(spark, coverage)  # `spark` existe nos notebooks Databricks
+
+
+if "spark" in globals():  # só corre dentro do Databricks
+    main()
