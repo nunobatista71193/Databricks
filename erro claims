@@ -1,4 +1,2 @@
-FileNotFoundError: Ficheiro não encontrado: /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/budget/Claims drivers - budget 2026_mes.xlsx
-A pasta /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw/01_raw/budget não existe. Última pasta que existe: /Volumes/agpt_insurance_dv_catalog/wkb_bus_operations_claimsmotor/pba&uw
-Conteúdo:
-  'mount.err'
+Error(message=adlv2: nil response with error, errorCode=system/Blob.Azure.Error, errno=resource temporarily unavailable, statusCode=0)
+ -> storagedatalake.adl2PathClient#GetProperties: Failure sending request: StatusCode=0 -- Original Error: Head "https://stdlsaidataagptdv01.dfs.core.windows.net/dbckcatalog/__unitystorage%2Fcatalogs%2Fbaf9cdbf-1db4-4a1d-9b25-e720016141f7%2Fvolumes%2Fb6446eae-1e77-4945-bcb2-ca3abc27cf80%2Fbt0y2uz0x04kdjbpzoxj9qpen3rz4ul8?st=2026-11-15T15%3A50%3A35Z&sv=2026-02-06&ske=2026-11-15T17%3A50%3A35Z&sig=Fv67RA81SY7rRyLNRftc0RZcEnJx4Ixyo3sjAIv6cLw%3D&sktid=e7f9d69c-13f3-457c-a04c-f555c1134fa4&se=2026-11-15T17%3A29%3A43Z&sdd=5&skoid=e0e87d9e-0475-437f-accf-be8bd687e6d8&spr=https&sks=b&skt=2026-11-15T15%3A50%3A35Z&sp=rl&skv=2025-01-05&sr=d": dial tcp 172.18.64.180:443: i/o timeout
