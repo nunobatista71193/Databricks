@@ -3,26 +3,22 @@
 # MAGIC # Sinistros IFRS17 por mês (AGS / SD / OCS)
 # MAGIC Conversão do programa SAS `apolice` → `ifrs17` → `r` → `base_final` → `base_export`.
 # MAGIC
-# MAGIC Todas as tabelas ficam no mesmo catalog e schema (parâmetros abaixo).
+# MAGIC Todas as tabelas ficam no mesmo catalog e schema (definidos no início do código).
 # MAGIC O SAS repetia a macro `%mes` para cada mês, escrito à mão. Aqui os meses
-# MAGIC vão de `data_ini` até `data_fim` (vazio = último mês de movimento na tabela de sinistros).
+# MAGIC vão de `DATA_INI` até `DATA_FIM` (None = último mês de movimento na tabela de sinistros).
 
 # COMMAND ----------
 
 from pyspark.sql import functions as F, Window
 
 # Onde estão as tabelas (iguais para todas)
-dbutils.widgets.text("catalog", "Catalog", "Catalog")
-dbutils.widgets.text("schema", "schema", "Schema")
-# Primeiro mês a processar (AAAAMM). Também é o filtro mínimo de movimento e de ocorrência.
-dbutils.widgets.text("data_ini", "202301", "Primeiro mês (AAAAMM)")
-# Último mês a processar (AAAAMM). Vazio = último mês de movimento existente.
-dbutils.widgets.text("data_fim", "", "Último mês (AAAAMM), vazio = automático")
+CATALOG = "Catalog"
+SCHEMA = "schema"
 
-CATALOG = dbutils.widgets.get("catalog").strip()
-SCHEMA = dbutils.widgets.get("schema").strip()
-DATA_INI = int(dbutils.widgets.get("data_ini").strip())
-DATA_FIM = dbutils.widgets.get("data_fim").strip()
+# Primeiro mês a processar (AAAAMM). Também é o filtro mínimo de movimento e de ocorrência.
+DATA_INI = 202301
+# Último mês a processar (AAAAMM). None = último mês de movimento existente.
+DATA_FIM = None
 
 # Nomes das tabelas (dentro do catalog.schema acima)
 TABELA_DATAMART = "core_datamart"     # &vDATAMART. no SAS
@@ -80,9 +76,8 @@ ifrs17 = (
 )
 
 # Último mês: se não for indicado, é o último mês de movimento existente
-if not DATA_FIM:
-    DATA_FIM = str(ifrs17.agg(F.max(F.col("dar").cast("int"))).first()[0])
-DATA_FIM = int(DATA_FIM)
+if DATA_FIM is None:
+    DATA_FIM = int(ifrs17.agg(F.max(F.col("dar").cast("int"))).first()[0])
 print(f"Meses a processar: {DATA_INI} a {DATA_FIM}")
 
 # COMMAND ----------
