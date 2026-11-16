@@ -1,229 +1,211 @@
-data apolice;
-set &vDATAMART. (keep= id_policy RENEWAL_NEW Ind_OnwDamage ac_period Dt_PlStartEffectDate Desc_NewRenewal);
-run;
-data ifrs17;
-set stgintps.Tpsinistros;
-if Cod_Companhia*1 in (1023,1129,1190);
-if lobid*1 in (7,8);
-y=put(year((Dt_Movimento)),4.);
-m=put(month((Dt_Movimento)),z2.);
-d=put(day((Dt_Movimento)),z2.);
-DAR=y||m;
-if dar*1>=202301;
+# Databricks notebook source
+# MAGIC %md
+# MAGIC # Sinistros IFRS17 por mês (AGS / SD / OCS)
+# MAGIC Conversão do programa SAS `apolice` → `ifrs17` → `r` → `base_final` → `base_export`.
+# MAGIC
+# MAGIC Todas as tabelas ficam no mesmo catalog e schema (parâmetros abaixo).
+# MAGIC O SAS repetia a macro `%mes` para cada mês, escrito à mão. Aqui os meses
+# MAGIC vão de `data_ini` até `data_fim` (vazio = último mês de movimento na tabela de sinistros).
 
-y=put(year((dt_ocorrencia)),4.);
-m=put(month((dt_ocorrencia)),z2.);
-d=put(day((dt_ocorrencia)),z2.);
-dsin=y||m;
-if dsin*1>=202301;
+# COMMAND ----------
 
-if Flag_IdsCredor='N';
-keep Cod_ComplexidadeSinistro id_apolice Cod_Companhia dar dt_ocorrencia id_ocorrencia id_sinistro id_sinistroccs Pag_Ind_Liquido Pag_Out_Liquido
-reemb_ind_liquido reemb_out_liquido Val_ReservaLiquida ReservingSegmentation Cod_EstadoOcorrencia Cod_CoberturaSinistro dsin dt_ocorrencia;
-run;
+from pyspark.sql import functions as F, Window
 
-data apol;
-set apolice;
-if id_policy='' then delete;
-Id_Apolice=id_policy;
-dsin=ac_period;
-drop id_policy ac_period;
-run;
-proc sort data=apol nodupkey;
-by id_apolice dsin;
-run;
-proc sort data=ifrs17;
-by id_apolice dsin;
-run;
-data r;
-merge ifrs17(in=a) apol(in=b);
-by id_apolice dsin;
-if a;
+# Onde estão as tabelas (iguais para todas)
+dbutils.widgets.text("catalog", "Catalog", "Catalog")
+dbutils.widgets.text("schema", "schema", "Schema")
+# Primeiro mês a processar (AAAAMM). Também é o filtro mínimo de movimento e de ocorrência.
+dbutils.widgets.text("data_ini", "202301", "Primeiro mês (AAAAMM)")
+# Último mês a processar (AAAAMM). Vazio = último mês de movimento existente.
+dbutils.widgets.text("data_fim", "", "Último mês (AAAAMM), vazio = automático")
 
-dias=dt_ocorrencia-Dt_PlStartEffectDate;
-if dias=. then new='RENEWAL';
-else if dias<=365 then new='NEW';
-else if dias>365 then new='RENEWAL';
+CATALOG = dbutils.widgets.get("catalog").strip()
+SCHEMA = dbutils.widgets.get("schema").strip()
+DATA_INI = int(dbutils.widgets.get("data_ini").strip())
+DATA_FIM = dbutils.widgets.get("data_fim").strip()
 
-if pag_ind_liquido=. then pag_ind_liquido=0;
-if Pag_Out_Liquido=. then Pag_Out_Liquido=0;
-if reemb_ind_liquido=. then reemb_ind_liquido=0;
-if reemb_out_liquido=. then reemb_out_liquido=0;
-if Val_ReservaLiquida=. then Val_ReservaLiquida=0;
-
-p=pag_ind_liquido+Pag_Out_Liquido;
-reemb=reemb_ind_liquido+reemb_out_liquido;
-r=Val_ReservaLiquida;
-
-pagos=p-reemb;
-reserva=r;
-
-ano=put(year((Dt_ocorrencia)),4.)*1;
-
-if Cod_ComplexidadeSinistro in ('MQIV','QIVPR') then Cod_CoberturaSinistro='QIV' ;/*Para garantir que o QIV nao vai para RC nem CCC*/
-if Cod_CoberturaSinistro='QIV' then ReservingSegmentation='Motor other classes';
-
-if ReservingSegmentation='Assistance_Auto' then delete;
+# Nomes das tabelas (dentro do catalog.schema acima)
+TABELA_DATAMART = "core_datamart"     # &vDATAMART. no SAS
+TABELA_SINISTROS = "tpsinistros"      # stgintps.Tpsinistros no SAS
+TABELA_DESTINO = "wrk_sinistros"      # resultado (base_export)
 
 
-drop ano_ini p r reemb Pag_Ind_Liquido Pag_Out_Liquido reemb_ind_liquido reemb_out_liquido Val_ReservaLiquida Dt_Ocorrencia Cod_EstadoOcorrencia
-Dt_PlStartEmissDate;
-
-run;
+def tabela(nome):
+    return f"`{CATALOG}`.`{SCHEMA}`.`{nome}`"
 
 
-data base_final;
-reservingsegmentation='xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
-ano=0;
-estado='x';
-run;
-%macro mes;
-/****************************************************/
-data base;
-set r;
+print("Datamart :", tabela(TABELA_DATAMART))
+print("Sinistros:", tabela(TABELA_SINISTROS))
+print("Destino  :", tabela(TABELA_DESTINO))
 
-if dar>&data then delete;
+# COMMAND ----------
 
-mes=&data;
-nsin=1;
-run;
-proc sort data=base;
-by id_sinistroccs descending dar; 
-run;
-proc sort data=base nodupkey;
-by id_sinistroccs; 
-run;
-proc sort data=base;
-by id_ocorrencia; 
-run;
-data base0;
-set base;
-nocorr=0;
-by id_ocorrencia;
-if last.id_ocorrencia then nocorr=1;
-run;
-data base1;
-set base0;
-estado='F';
-if abs(reserva)>0.1 then estado='A';
-grave=0;
-if pagos+reserva>=50000 then grave=1;
-run;
-proc sort;
-by Cod_Companhia reservingsegmentation grave estado ano mes Cod_CoberturaSinistro /*RENEWAL_NEW*/ new Ind_OnwDamage;
-run;
-proc summary;
-by Cod_Companhia reservingsegmentation grave estado ano mes Cod_CoberturaSinistro /*RENEWAL_NEW*/ new Ind_OnwDamage;
-var pagos reserva nsin nocorr;
-output out=base&data (drop=_type_ _freq_) sum=;
-run;
+# apolice + apol: uma linha por apólice e mês (id_apolice, dsin)
+apol = (
+    spark.table(tabela(TABELA_DATAMART))
+    .select("id_policy", "RENEWAL_NEW", "Ind_OnwDamage", "ac_period",
+            "Dt_PlStartEffectDate", "Desc_NewRenewal")
+    # if id_policy='' then delete;
+    .filter(F.col("id_policy").isNotNull() & (F.trim(F.col("id_policy").cast("string")) != ""))
+    .withColumn("id_apolice", F.trim(F.col("id_policy").cast("string")))
+    .withColumn("dsin", F.col("ac_period").cast("string"))
+    .drop("id_policy", "ac_period")
+    # proc sort nodupkey by id_apolice dsin
+    .dropDuplicates(["id_apolice", "dsin"])
+)
 
-data base_final;
-set base_final base&data;
-if reservingsegmentation='xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' then delete;
-run;
+# COMMAND ----------
 
-proc delete data=base&data;
-run;
-%mend mes;
+# ifrs17: movimentos de sinistros
+mes_movimento = F.date_format(F.to_date(F.col("Dt_Movimento")), "yyyyMM")
+mes_ocorrencia = F.date_format(F.to_date(F.col("dt_ocorrencia")), "yyyyMM")
 
-%let data=202301;
-%mes;
-%let data=202302;
-%mes;
-%let data=202303;
-%mes;
-%let data=202304;
-%mes;
-%let data=202305;
-%mes;
-%let data=202306;
-%mes;
-%let data=202307;
-%mes;
-%let data=202308;
-%mes;
-%let data=202309;
-%mes;
-%let data=202310;
-%mes;
-%let data=202311;
-%mes;
-%let data=202312;
-%mes;
-%let data=202401;
-%mes;
-%let data=202402;
-%mes;
-%let data=202403;
-%mes;
-%let data=202404;
-%mes;
-%let data=202405;
-%mes;
-%let data=202406;
-%mes;
-%let data=202407;
-%mes;
-%let data=202408;
-%mes;
-%let data=202409;
-%mes;
-%let data=202410;
-%mes;
-%let data=202411;
-%mes;
-%let data=202412;
-%mes;
-%let data=202501;
-%mes;
-%let data=202502;
-%mes;
-%let data=202503;
-%mes;
-%let data=202504;
-%mes;
-%let data=202505;
-%mes;
-%let data=202506;
-%mes;
-%let data=202507;
-%mes;
-%let data=202508;
-%mes;
-%let data=202509;
-%mes;
-%let data=202510;
-%mes;
-%let data=202511;
-%mes;
-%let data=202512;
-%mes;
-%let data=202601;
-%mes;
-%let data=202602;
-%mes;
-%let data=202603;
-%mes;
-%let data=202604;
-%mes;
-%let data=202605;
-%mes;
-%let data=202606;
-%mes;
-%let data=202607;
-%mes;
-%let data=202608;
-%mes;
+ifrs17 = (
+    spark.table(tabela(TABELA_SINISTROS))
+    .filter(F.col("Cod_Companhia").cast("int").isin(1023, 1129, 1190))
+    .filter(F.col("lobid").cast("int").isin(7, 8))
+    .withColumn("dar", mes_movimento)
+    .withColumn("dsin", mes_ocorrencia)
+    .filter((F.col("dar").cast("int") >= DATA_INI) & (F.col("dsin").cast("int") >= DATA_INI))
+    .filter(F.col("Flag_IdsCredor") == "N")
+    .select(
+        "Cod_ComplexidadeSinistro", "id_apolice", "Cod_Companhia", "dar",
+        F.to_date(F.col("dt_ocorrencia")).alias("dt_ocorrencia"),
+        "id_ocorrencia", "id_sinistro", "id_sinistroccs",
+        "Pag_Ind_Liquido", "Pag_Out_Liquido", "reemb_ind_liquido", "reemb_out_liquido",
+        "Val_ReservaLiquida", "ReservingSegmentation", "Cod_EstadoOcorrencia",
+        "Cod_CoberturaSinistro", "dsin",
+    )
+    .withColumn("id_apolice", F.trim(F.col("id_apolice").cast("string")))
+)
 
-data base_export;
-set base_final;
+# Último mês: se não for indicado, é o último mês de movimento existente
+if not DATA_FIM:
+    DATA_FIM = str(ifrs17.agg(F.max(F.col("dar").cast("int"))).first()[0])
+DATA_FIM = int(DATA_FIM)
+print(f"Meses a processar: {DATA_INI} a {DATA_FIM}")
 
-if Cod_Companhia='1023' then Cod_Companhia='OCS';
-else if Cod_Companhia='1129' then Cod_Companhia='AGS';
-else Cod_Companhia='SD';
+# COMMAND ----------
 
-if new='NEW' then new='NB';
-else new='RW';
 
-run;
+def zero_se_nulo(coluna):
+    return F.coalesce(F.col(coluna).cast("double"), F.lit(0.0))
+
+
+# r: junta a apólice (só mantém sinistros, como o "if a" do merge) e calcula campos
+dias = F.datediff(F.col("dt_ocorrencia"), F.to_date(F.col("Dt_PlStartEffectDate")))
+
+r = (
+    ifrs17.join(apol, on=["id_apolice", "dsin"], how="left")
+    .withColumn("dias", dias)
+    # sem data de início fica RENEWAL; até 365 dias é NEW
+    .withColumn(
+        "new",
+        F.when(F.col("dias").isNull(), F.lit("RENEWAL"))
+         .when(F.col("dias") <= 365, F.lit("NEW"))
+         .otherwise(F.lit("RENEWAL")),
+    )
+    .withColumn(
+        "pagos",
+        (zero_se_nulo("Pag_Ind_Liquido") + zero_se_nulo("Pag_Out_Liquido"))
+        - (zero_se_nulo("reemb_ind_liquido") + zero_se_nulo("reemb_out_liquido")),
+    )
+    .withColumn("reserva", zero_se_nulo("Val_ReservaLiquida"))
+    .withColumn("ano", F.year(F.col("dt_ocorrencia")))
+    # Garante que o QIV não vai para RC nem CCC
+    .withColumn(
+        "Cod_CoberturaSinistro",
+        F.when(F.col("Cod_ComplexidadeSinistro").isin("MQIV", "QIVPR"), F.lit("QIV"))
+         .otherwise(F.col("Cod_CoberturaSinistro")),
+    )
+    .withColumn(
+        "ReservingSegmentation",
+        F.when(F.col("Cod_CoberturaSinistro") == "QIV", F.lit("Motor other classes"))
+         .otherwise(F.col("ReservingSegmentation")),
+    )
+    # if ReservingSegmentation='Assistance_Auto' then delete;  (nulos não são apagados)
+    .filter(~F.coalesce(F.col("ReservingSegmentation") == "Assistance_Auto", F.lit(False)))
+    .select(
+        "id_apolice", "dsin", "Cod_ComplexidadeSinistro", "Cod_Companhia", "dar",
+        "id_ocorrencia", "id_sinistro", "id_sinistroccs", "ReservingSegmentation",
+        "Cod_CoberturaSinistro", "Ind_OnwDamage", "new", "pagos", "reserva", "ano",
+    )
+    .withColumn("dar_n", F.col("dar").cast("int"))
+)
+
+# COMMAND ----------
+
+# Macro %mes: para cada mês, a posição de cada sinistro (id_sinistroccs) é o seu
+# último movimento até esse mês. Em vez de repetir a macro, junta-se a lista de meses.
+MESES = []
+ano_m, mes_m = divmod(DATA_INI, 100)
+while ano_m * 100 + mes_m <= DATA_FIM:
+    MESES.append(ano_m * 100 + mes_m)
+    mes_m += 1
+    if mes_m > 12:
+        ano_m, mes_m = ano_m + 1, 1
+
+meses = spark.createDataFrame([(m,) for m in MESES], "mes int")
+
+# if dar>&data then delete;
+base = r.join(F.broadcast(meses), F.col("dar_n") <= F.col("mes"), "inner")
+
+# sort by id_sinistroccs descending dar + nodupkey: fica o último movimento
+w_sinistro = Window.partitionBy("mes", "id_sinistroccs").orderBy(F.col("dar_n").desc())
+base = (
+    base.withColumn("_rn", F.row_number().over(w_sinistro))
+    .filter(F.col("_rn") == 1)
+    .drop("_rn")
+)
+
+# nocorr=1 numa linha por ocorrência (a última por id_sinistroccs, como o last.id_ocorrencia)
+w_ocorrencia = Window.partitionBy("mes", "id_ocorrencia").orderBy(F.col("id_sinistroccs").desc())
+base = (
+    base.withColumn("nocorr", F.when(F.row_number().over(w_ocorrencia) == 1, F.lit(1)).otherwise(F.lit(0)))
+    .withColumn("nsin", F.lit(1))
+    # estado F = fechado, A = aberto (reserva acima de 0,10)
+    .withColumn("estado", F.when(F.abs(F.col("reserva")) > 0.1, F.lit("A")).otherwise(F.lit("F")))
+    # grave = pagos + reserva >= 50 000
+    .withColumn("grave", F.when(F.col("pagos") + F.col("reserva") >= 50000, F.lit(1)).otherwise(F.lit(0)))
+)
+
+# COMMAND ----------
+
+# proc summary: soma por segmento, estado, ano, mês, cobertura, novo/renovação, DP/RC
+CHAVES = ["Cod_Companhia", "ReservingSegmentation", "grave", "estado", "ano", "mes",
+          "Cod_CoberturaSinistro", "new", "Ind_OnwDamage"]
+
+base_final = base.groupBy(*CHAVES).agg(
+    F.sum("pagos").alias("pagos"),
+    F.sum("reserva").alias("reserva"),
+    F.sum("nsin").alias("nsin"),
+    F.sum("nocorr").alias("nocorr"),
+)
+
+# base_export: abreviaturas das empresas e NB / RW
+companhia = F.trim(F.col("Cod_Companhia").cast("string"))
+base_export = (
+    base_final
+    .withColumn(
+        "Cod_Companhia",
+        F.when(companhia == "1023", F.lit("OCS"))
+         .when(companhia == "1129", F.lit("AGS"))
+         .otherwise(F.lit("SD")),
+    )
+    .withColumn("new", F.when(F.col("new") == "NEW", F.lit("NB")).otherwise(F.lit("RW")))
+    .orderBy("Cod_Companhia", "mes", "ReservingSegmentation", "Cod_CoberturaSinistro")
+)
+
+display(base_export)
+
+# COMMAND ----------
+
+# Grava o resultado em Delta, substituindo o conteúdo anterior da tabela de destino
+(
+    base_export.write
+    .format("delta")
+    .mode("overwrite")
+    .option("overwriteSchema", "true")
+    .saveAsTable(tabela(TABELA_DESTINO))
+)
+print(f"Tabela gravada: {tabela(TABELA_DESTINO)}")
