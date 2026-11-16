@@ -1,0 +1,229 @@
+data apolice;
+set &vDATAMART. (keep= id_policy RENEWAL_NEW Ind_OnwDamage ac_period Dt_PlStartEffectDate Desc_NewRenewal);
+run;
+data ifrs17;
+set stgintps.Tpsinistros;
+if Cod_Companhia*1 in (1023,1129,1190);
+if lobid*1 in (7,8);
+y=put(year((Dt_Movimento)),4.);
+m=put(month((Dt_Movimento)),z2.);
+d=put(day((Dt_Movimento)),z2.);
+DAR=y||m;
+if dar*1>=202301;
+
+y=put(year((dt_ocorrencia)),4.);
+m=put(month((dt_ocorrencia)),z2.);
+d=put(day((dt_ocorrencia)),z2.);
+dsin=y||m;
+if dsin*1>=202301;
+
+if Flag_IdsCredor='N';
+keep Cod_ComplexidadeSinistro id_apolice Cod_Companhia dar dt_ocorrencia id_ocorrencia id_sinistro id_sinistroccs Pag_Ind_Liquido Pag_Out_Liquido
+reemb_ind_liquido reemb_out_liquido Val_ReservaLiquida ReservingSegmentation Cod_EstadoOcorrencia Cod_CoberturaSinistro dsin dt_ocorrencia;
+run;
+
+data apol;
+set apolice;
+if id_policy='' then delete;
+Id_Apolice=id_policy;
+dsin=ac_period;
+drop id_policy ac_period;
+run;
+proc sort data=apol nodupkey;
+by id_apolice dsin;
+run;
+proc sort data=ifrs17;
+by id_apolice dsin;
+run;
+data r;
+merge ifrs17(in=a) apol(in=b);
+by id_apolice dsin;
+if a;
+
+dias=dt_ocorrencia-Dt_PlStartEffectDate;
+if dias=. then new='RENEWAL';
+else if dias<=365 then new='NEW';
+else if dias>365 then new='RENEWAL';
+
+if pag_ind_liquido=. then pag_ind_liquido=0;
+if Pag_Out_Liquido=. then Pag_Out_Liquido=0;
+if reemb_ind_liquido=. then reemb_ind_liquido=0;
+if reemb_out_liquido=. then reemb_out_liquido=0;
+if Val_ReservaLiquida=. then Val_ReservaLiquida=0;
+
+p=pag_ind_liquido+Pag_Out_Liquido;
+reemb=reemb_ind_liquido+reemb_out_liquido;
+r=Val_ReservaLiquida;
+
+pagos=p-reemb;
+reserva=r;
+
+ano=put(year((Dt_ocorrencia)),4.)*1;
+
+if Cod_ComplexidadeSinistro in ('MQIV','QIVPR') then Cod_CoberturaSinistro='QIV' ;/*Para garantir que o QIV nao vai para RC nem CCC*/
+if Cod_CoberturaSinistro='QIV' then ReservingSegmentation='Motor other classes';
+
+if ReservingSegmentation='Assistance_Auto' then delete;
+
+
+drop ano_ini p r reemb Pag_Ind_Liquido Pag_Out_Liquido reemb_ind_liquido reemb_out_liquido Val_ReservaLiquida Dt_Ocorrencia Cod_EstadoOcorrencia
+Dt_PlStartEmissDate;
+
+run;
+
+
+data base_final;
+reservingsegmentation='xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+ano=0;
+estado='x';
+run;
+%macro mes;
+/****************************************************/
+data base;
+set r;
+
+if dar>&data then delete;
+
+mes=&data;
+nsin=1;
+run;
+proc sort data=base;
+by id_sinistroccs descending dar; 
+run;
+proc sort data=base nodupkey;
+by id_sinistroccs; 
+run;
+proc sort data=base;
+by id_ocorrencia; 
+run;
+data base0;
+set base;
+nocorr=0;
+by id_ocorrencia;
+if last.id_ocorrencia then nocorr=1;
+run;
+data base1;
+set base0;
+estado='F';
+if abs(reserva)>0.1 then estado='A';
+grave=0;
+if pagos+reserva>=50000 then grave=1;
+run;
+proc sort;
+by Cod_Companhia reservingsegmentation grave estado ano mes Cod_CoberturaSinistro /*RENEWAL_NEW*/ new Ind_OnwDamage;
+run;
+proc summary;
+by Cod_Companhia reservingsegmentation grave estado ano mes Cod_CoberturaSinistro /*RENEWAL_NEW*/ new Ind_OnwDamage;
+var pagos reserva nsin nocorr;
+output out=base&data (drop=_type_ _freq_) sum=;
+run;
+
+data base_final;
+set base_final base&data;
+if reservingsegmentation='xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' then delete;
+run;
+
+proc delete data=base&data;
+run;
+%mend mes;
+
+%let data=202301;
+%mes;
+%let data=202302;
+%mes;
+%let data=202303;
+%mes;
+%let data=202304;
+%mes;
+%let data=202305;
+%mes;
+%let data=202306;
+%mes;
+%let data=202307;
+%mes;
+%let data=202308;
+%mes;
+%let data=202309;
+%mes;
+%let data=202310;
+%mes;
+%let data=202311;
+%mes;
+%let data=202312;
+%mes;
+%let data=202401;
+%mes;
+%let data=202402;
+%mes;
+%let data=202403;
+%mes;
+%let data=202404;
+%mes;
+%let data=202405;
+%mes;
+%let data=202406;
+%mes;
+%let data=202407;
+%mes;
+%let data=202408;
+%mes;
+%let data=202409;
+%mes;
+%let data=202410;
+%mes;
+%let data=202411;
+%mes;
+%let data=202412;
+%mes;
+%let data=202501;
+%mes;
+%let data=202502;
+%mes;
+%let data=202503;
+%mes;
+%let data=202504;
+%mes;
+%let data=202505;
+%mes;
+%let data=202506;
+%mes;
+%let data=202507;
+%mes;
+%let data=202508;
+%mes;
+%let data=202509;
+%mes;
+%let data=202510;
+%mes;
+%let data=202511;
+%mes;
+%let data=202512;
+%mes;
+%let data=202601;
+%mes;
+%let data=202602;
+%mes;
+%let data=202603;
+%mes;
+%let data=202604;
+%mes;
+%let data=202605;
+%mes;
+%let data=202606;
+%mes;
+%let data=202607;
+%mes;
+%let data=202608;
+%mes;
+
+data base_export;
+set base_final;
+
+if Cod_Companhia='1023' then Cod_Companhia='OCS';
+else if Cod_Companhia='1129' then Cod_Companhia='AGS';
+else Cod_Companhia='SD';
+
+if new='NEW' then new='NB';
+else new='RW';
+
+run;
