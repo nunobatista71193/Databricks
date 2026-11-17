@@ -1,0 +1,45 @@
+És analista de dados de seguros automóvel (Motor). Vou partilhar contigo ficheiros do "Claims drivers" (follow-up real mensal, orçamento 2026 e histórico) e um dashboard em HTML (colado abaixo). A tua tarefa é transformar os meus dados no formato que o dashboard consome e devolver-mo pronto a usar.
+
+## 1. Estrutura que o dashboard precisa
+Uma tabela CSV com UMA LINHA por combinação vista × marca × carteira × cobertura, com estas colunas exatas (cabeçalho em minúsculas, separador vírgula, ponto decimal, sem separador de milhares):
+
+view,brand,seg,cov,exposure,ep,claims,cc
+
+- view: FY24 | FY25 | YTD25 | ORC | YTD26
+  - FY24 e FY25 = anos completos (12 meses).
+  - YTD25 e YTD26 = acumulado do ano até ao mesmo mês de corte (confirma o mês de corte e indica-o).
+  - ORC = orçamento 2026 acumulado até esse mesmo mês de corte.
+- brand: o código/nome de cada marca, igual em todas as linhas (as 3 marcas do grupo).
+- seg: "Novo negócio" | "Renovações".
+- cov: "DP" (Danos Próprios) | "RC" (Responsabilidade Civil).
+- exposure: exposição em anos-risco (car-years) do período. Para DP usa apenas a exposição das apólices com a cobertura DP; para RC a exposição total das apólices.
+- ep: prémios adquiridos (earned premium) em euros.
+- claims: número de sinistros (reportados/abertos no período, segundo a regra do ficheiro).
+- cc: claims charge em euros (custo incorrido: pagamentos + variação de provisões, valor bruto de resseguro). Indica se inclui ou não despesas de gestão de sinistros.
+
+Total esperado: 5 vistas × nº de marcas × 2 carteiras × 2 coberturas linhas (60 linhas para 3 marcas). Se faltar alguma combinação, não inventes: lista-a no fim.
+
+## 2. O que o dashboard calcula sozinho (NÃO calcules nem incluas)
+Gross LR = cc/ep · Frequência = claims/exposure · Custo médio = cc/claims · Prémio médio = ep/exposure · Burning cost = cc/exposure. Para o total DP+RC o dashboard soma os sinistros de DP e RC e usa a exposição da RC.
+
+## 3. Regras
+- Não arredondes: mantém os valores tal como estão nos ficheiros (inteiros ou com casas decimais).
+- Não inventes, não estimes e não preenchas lacunas. Se um valor não existir ou for ambíguo, deixa a linha fora do CSV e lista-a em "Dúvidas".
+- Se os meus ficheiros tiverem colunas com nomes diferentes, diz-me o mapeamento que usaste (coluna de origem → coluna destino) antes do CSV.
+- Se o "novo negócio" não estiver identificado nos ficheiros, pára e pergunta-me como o identificar; não assumas.
+- Não incluas dados pessoais de clientes: só valores agregados.
+
+## 4. Validações (mostra o resultado de cada uma)
+1. Por vista e marca: soma de DP+RC e das duas carteiras bate com os totais do ficheiro de origem (indica diferenças, se existirem).
+2. Nenhum valor negativo ou vazio; claims > 0 sempre que cc > 0.
+3. Gross LR por marca e por vista (ep e cc somados): apresenta uma tabela pequena para eu confirmar com os números que conheço.
+4. Mês de corte dos YTD e do ORC é o mesmo.
+
+## 5. O que me deves devolver, por esta ordem
+A) Pressupostos e mapeamento de colunas (curto).
+B) O CSV completo, num único bloco de código, pronto a copiar (sem texto dentro do bloco).
+C) A tabela de validação (ponto 4) e a lista de "Dúvidas".
+D) O dashboard HTML completo, igual ao que te dei, alterando APENAS o conteúdo da constante EMBEDDED_CSV (entre as crases, perto do início do script), onde colas o CSV do ponto B. Não alteres mais nada no código. Se não conseguires devolver o ficheiro HTML inteiro, diz-o e dá-me só o CSV: eu carrego-o no dashboard no painel "Dados base, definições e carregar dados reais".
+
+## 6. Dashboard HTML (cola o conteúdo completo abaixo)
+<<< COLAR AQUI O HTML DO DASHBOARD >>>
