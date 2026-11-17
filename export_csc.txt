@@ -1,0 +1,178 @@
+# Databricks notebook source
+# MAGIC %md
+# MAGIC # Exportação para CSV → SharePoint
+# MAGIC Lê uma tabela/ficheiro, gera um CSV e carrega-o para uma pasta do SharePoint (Microsoft Graph API).
+# MAGIC O HTML do dashboard passa a ler sempre o mesmo ficheiro (nome fixo, sobrescrito a cada execução).
+# MAGIC
+# MAGIC **Pré-requisitos (uma vez)**
+# MAGIC 1. App Registration no Azure AD (Entra ID) com permissão de aplicação `Sites.Selected` (ou `Sites.ReadWrite.All`) + admin consent.
+# MAGIC    Com `Sites.Selected`, o admin tem de dar à app permissão de escrita no site concreto.
+# MAGIC 2. Guardar os segredos num *secret scope* do Databricks: `tenant-id`, `client-id`, `client-secret`.
+# MAGIC 3. Preencher a célula de configuração abaixo.
+
+# COMMAND ----------
+
+# MAGIC %pip install requests --quiet
+
+# COMMAND ----------
+
+# DBTITLE 1,Configuração
+# ---------- ORIGEM ----------
+# Opção A: tabela (Unity Catalog / metastore)
+SOURCE_TABLE = "catalogo.schema.tabela_claims"   # deixar "" se usar ficheiro
+# Opção B: ficheiro (CSV/Parquet em volume, DBFS ou storage)
+SOURCE_FILE = ""                                  # ex.: "/Volumes/catalogo/schema/vol/claims.parquet"
+SOURCE_FORMAT = "parquet"                         # parquet | csv | delta | json
+
+# Query opcional para filtrar/agregar antes de exportar (usa a vista temporária "src")
+SQL_TRANSFORM = ""                                # ex.: "SELECT ano, produto, SUM(ep) AS ep FROM src GROUP BY ano, produto"
+
+# ---------- DESTINO SHAREPOINT ----------
+SP_HOSTNAME = "empresa.sharepoint.com"            # host do SharePoint
+SP_SITE_PATH = "/sites/NomeDoSite"                # caminho do site
+SP_FOLDER = "Dashboards/Claims"                   # pasta dentro da biblioteca "Documentos"
+SP_LIBRARY = "Documents"                          # nome da biblioteca (em PT costuma ser "Documentos" – confirmar)
+OUTPUT_FILENAME = "claims_drivers.csv"            # nome fixo, sobrescrito a cada execução
+
+# ---------- SEGREDOS ----------
+SECRET_SCOPE = "sharepoint"
+
+# ---------- CSV ----------
+CSV_SEP = ","                                     # usar ";" se o consumidor esperar formato PT/Excel
+CSV_ENCODING = "utf-8-sig"                        # utf-8-sig mantém acentos corretos no Excel
+
+# COMMAND ----------
+
+# DBTITLE 1,Ler dados e preparar DataFrame
+if SOURCE_TABLE:
+    df = spark.table(SOURCE_TABLE)
+elif SOURCE_FILE:
+    reader = spark.read.format(SOURCE_FORMAT)
+    if SOURCE_FORMAT == "csv":
+        reader = reader.option("header", True).option("inferSchema", True)
+    df = reader.load(SOURCE_FILE)
+else:
+    raise ValueError("Definir SOURCE_TABLE ou SOURCE_FILE.")
+
+if SQL_TRANSFORM:
+    df.createOrReplaceTempView("src")
+    df = spark.sql(SQL_TRANSFORM)
+
+print(f"Linhas: {df.count():,} | Colunas: {len(df.columns)}")
+display(df.limit(10))
+
+# COMMAND ----------
+
+# DBTITLE 1,Gerar CSV local (ficheiro único)
+import os, tempfile
+
+local_dir = tempfile.mkdtemp()
+local_path = os.path.join(local_dir, OUTPUT_FILENAME)
+
+# Para volumes até ~ alguns milhões de linhas, toPandas é simples e dá um único CSV limpo.
+# Para volumes muito grandes, escrever com df.coalesce(1).write e mover o part-file.
+df.toPandas().to_csv(local_path, index=False, sep=CSV_SEP, encoding=CSV_ENCODING, date_format="%Y-%m-%d")
+
+size_mb = os.path.getsize(local_path) / 1024 / 1024
+print(f"CSV gerado: {local_path} ({size_mb:.2f} MB)")
+
+# COMMAND ----------
+
+# DBTITLE 1,Autenticação (Microsoft Graph)
+import requests
+
+tenant_id     = dbutils.secrets.get(SECRET_SCOPE, "tenant-id")
+client_id     = dbutils.secrets.get(SECRET_SCOPE, "client-id")
+client_secret = dbutils.secrets.get(SECRET_SCOPE, "client-secret")
+
+token_resp = requests.post(
+    f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token",
+    data={
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "scope": "https://graph.microsoft.com/.default",
+        "grant_type": "client_credentials",
+    },
+    timeout=30,
+)
+token_resp.raise_for_status()
+HEADERS = {"Authorization": f"Bearer {token_resp.json()['access_token']}"}
+GRAPH = "https://graph.microsoft.com/v1.0"
+
+# COMMAND ----------
+
+# DBTITLE 1,Localizar site e biblioteca
+site = requests.get(f"{GRAPH}/sites/{SP_HOSTNAME}:{SP_SITE_PATH}", headers=HEADERS, timeout=30)
+site.raise_for_status()
+site_id = site.json()["id"]
+
+drives = requests.get(f"{GRAPH}/sites/{site_id}/drives", headers=HEADERS, timeout=30)
+drives.raise_for_status()
+drive = next((d for d in drives.json()["value"] if d["name"] == SP_LIBRARY), None)
+if drive is None:
+    raise ValueError(f"Biblioteca '{SP_LIBRARY}' não encontrada. Disponíveis: {[d['name'] for d in drives.json()['value']]}")
+drive_id = drive["id"]
+
+# COMMAND ----------
+
+# DBTITLE 1,Upload (sobrescreve o ficheiro existente)
+from urllib.parse import quote
+
+remote_path = f"{SP_FOLDER.strip('/')}/{OUTPUT_FILENAME}"
+item_url = f"{GRAPH}/drives/{drive_id}/root:/{quote(remote_path)}"
+SIMPLE_LIMIT = 4 * 1024 * 1024  # 4 MB
+
+file_size = os.path.getsize(local_path)
+
+if file_size <= SIMPLE_LIMIT:
+    with open(local_path, "rb") as f:
+        r = requests.put(f"{item_url}:/content", headers={**HEADERS, "Content-Type": "text/csv"}, data=f, timeout=120)
+    r.raise_for_status()
+    result = r.json()
+else:
+    # Upload em blocos (ficheiros > 4 MB)
+    sess = requests.post(
+        f"{item_url}:/createUploadSession",
+        headers=HEADERS,
+        json={"item": {"@microsoft.graph.conflictBehavior": "replace"}},
+        timeout=30,
+    )
+    sess.raise_for_status()
+    upload_url = sess.json()["uploadUrl"]
+
+    CHUNK = 320 * 1024 * 10  # múltiplo de 320 KiB (exigência da API)
+    with open(local_path, "rb") as f:
+        start = 0
+        while start < file_size:
+            chunk = f.read(CHUNK)
+            end = start + len(chunk) - 1
+            r = requests.put(
+                upload_url,
+                headers={"Content-Length": str(len(chunk)), "Content-Range": f"bytes {start}-{end}/{file_size}"},
+                data=chunk,
+                timeout=300,
+            )
+            r.raise_for_status()
+            start = end + 1
+    result = r.json()
+
+print("Upload concluído:", result.get("webUrl"))
+
+# COMMAND ----------
+
+# DBTITLE 1,(Opcional) Ficheiro de controlo com data da última atualização
+import json, datetime
+
+meta = {
+    "file": OUTPUT_FILENAME,
+    "rows": df.count(),
+    "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+}
+r = requests.put(
+    f"{GRAPH}/drives/{drive_id}/root:/{quote(SP_FOLDER.strip('/') + '/last_update.json')}:/content",
+    headers={**HEADERS, "Content-Type": "application/json"},
+    data=json.dumps(meta),
+    timeout=60,
+)
+r.raise_for_status()
+print("Metadados:", meta)
