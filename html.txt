@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Claims Drivers · Motor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--or:#F2541B;--ink:#1E1E1E;--sub:#4A5A68;--card:#F7F4ED;--card2:#EFEAE0;--hl:#FFF0E8;--hl-line:#F3C4AF;--line:#E3DCCF;--grid:#E0E3E1;--slate:#6B7F92;--blue:#3F78A8;--navy:#14283A;--good:#0F7C85;--bad:#C8321A;--neu:#6B6B6B;--muted:#5A6874}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',Arial,sans-serif;background:#fff;color:var(--ink);line-height:1.35;-webkit-text-size-adjust:100%}
+svg text{font-family:inherit}
+.wrap{max-width:1380px;margin:0 auto;padding:26px 24px 56px}
+header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+h1{font-size:32px;font-weight:700;color:var(--or);line-height:1.15}
+.sub{font-size:16px;color:var(--sub);margin-top:6px}
+.chip{font-size:13px;font-weight:700;color:var(--navy);background:var(--card);border:2px solid var(--line);border-radius:999px;padding:5px 12px}
+.bar{position:sticky;top:0;z-index:6;background:#fff;border-bottom:2px solid var(--line);padding:10px 0;margin:14px 0 22px;display:flex;gap:10px 28px;flex-wrap:wrap;align-items:center}
+.fl{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:700;color:var(--sub)}
+.seg{display:inline-flex;background:var(--card);border-radius:10px;padding:3px;flex-wrap:wrap}
+.seg button{font:inherit;font-size:14px;border:0;background:transparent;padding:7px 14px;border-radius:8px;color:var(--sub);cursor:pointer;min-height:38px}
+.seg button[aria-pressed=true]{background:var(--navy);color:#fff;font-weight:700}
+.seg button:focus-visible,summary:focus-visible,.btn:focus-visible{outline:3px solid var(--or);outline-offset:2px}
+.sec-h{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:6px 0 14px}
+h2{font-size:26px;font-weight:700;color:var(--or);line-height:1.2}
+.sec-h p{font-size:15px;color:var(--sub);margin-top:4px}
+.b1{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;align-items:start}
+.stack{display:flex;flex-direction:column;gap:16px;min-width:0}
+.card{background:var(--card);border-radius:14px;padding:16px 18px;min-width:0}
+.card h3{font-size:17px;font-weight:700;margin-bottom:2px}
+.card .cap{font-size:13px;color:var(--muted);margin-bottom:8px}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.tile{background:var(--card);border-radius:14px;padding:12px 16px}
+.tl{font-size:14px;font-weight:700}
+.tv{font-size:30px;font-weight:700;line-height:1.15;color:var(--or);margin:2px 0 4px}
+.td{font-size:13px;line-height:1.4}
+.dlab{color:var(--muted)}
+.dl{font-weight:700;white-space:nowrap}.dl i{font-style:normal;font-size:9px;margin-right:3px;vertical-align:1px}
+.good{color:var(--good)}.bad{color:var(--bad)}.neu{color:var(--neu)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.hl{background:var(--hl);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px;position:sticky;top:76px}
+.hl .hh{display:flex;align-items:center;gap:10px}.hl .hh i{display:block;width:8px;height:28px;background:var(--or);border-radius:4px}
+.hl h3{font-size:22px;color:var(--or)}
+.hi{display:flex;flex-direction:column;gap:3px}.hi+.hi{border-top:2px solid var(--hl-line);padding-top:14px}
+.hi b{font-size:17px;line-height:1.25;color:var(--or)}.hi span{font-size:14px;line-height:1.4;color:#2B2B2B}
+.hl-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:16px}
+.hl-strip .hi{background:var(--hl);border-radius:14px;padding:14px 18px;border:0}
+.hl-strip .hi+.hi{border-top:0;padding-top:14px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;margin:4px 0 8px;align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+.covh{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.covh h3{font-size:20px;color:var(--navy)}
+.meters{display:flex;gap:16px;font-size:12.5px;color:var(--muted)}
+.meter{width:96px;height:8px;border-radius:4px;background:#DCD5C6;margin:4px 0 2px;overflow:hidden}.meter span{display:block;height:100%;background:var(--or);border-radius:4px}
+.meters b{color:var(--ink)}
+.tiles.sm{grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.tiles.sm .tile{background:#fff;padding:9px 12px;border-radius:10px}
+.tiles.sm .tv{font-size:22px}.tiles.sm .tl{font-size:13px}.tiles.sm .td{font-size:12px}
+.sub-h{font-size:14px;font-weight:700;margin:10px 0 2px;color:var(--navy)}
+svg{display:block;width:100%;height:auto}
+.legend svg{display:inline-block;width:auto;height:auto;flex:none}
+.legend span{white-space:nowrap}
+.row2 .card>svg{max-width:560px;margin:0 auto}
+.tabw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left;font-weight:700}
+th{font-size:12.5px;color:var(--sub);font-weight:700}
+thead tr.g th{text-align:center;color:var(--navy);border-bottom:2px solid var(--line);font-size:13.5px}
+tr.tot td{background:var(--card2)}
+details{margin-top:16px;background:var(--card);border-radius:14px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700;font-size:16px;color:var(--navy);min-height:28px}
+details .in{margin-top:12px}
+details p.n{font-size:13.5px;color:var(--sub);margin:6px 0}
+textarea{width:100%;min-height:130px;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;border:2px solid var(--line);border-radius:10px;padding:10px;background:#fff;color:var(--ink)}
+.btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.btn{font:inherit;font-size:14px;font-weight:700;border:0;border-radius:10px;padding:9px 16px;background:var(--navy);color:#fff;cursor:pointer;min-height:40px}
+.btn.s{background:#fff;color:var(--navy);border:2px solid var(--line)}
+#msg{font-size:14px;margin-top:10px;font-weight:700}
+.defs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:4px 24px;font-size:13.5px;color:var(--sub);margin-top:8px}
+.defs b{color:var(--ink)}
+footer{margin-top:22px;font-size:13.5px;color:var(--muted);display:flex;gap:10px;align-items:center}
+footer i{width:4px;height:22px;background:var(--or);display:block}
+#tip{position:fixed;pointer-events:none;background:var(--navy);color:#fff;font-size:12.5px;padding:6px 10px;border-radius:7px;opacity:0;transition:opacity .08s;z-index:20;max-width:260px;line-height:1.35}
+.sec2{margin-top:44px;padding-top:26px;border-top:4px solid var(--or)}
+@media(max-width:1060px){.b1{grid-template-columns:1fr}.hl{position:static;order:-1}.cols2,.row2{grid-template-columns:1fr}}
+@media(max-width:640px){.tiles,.tiles.sm{grid-template-columns:repeat(2,1fr)}h1{font-size:26px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div>
+    <h1>Claims Drivers · Motor</h1>
+    <p class="sub">Prémios adquiridos, claims charge e Gross LR, com frequência e custo médio como drivers</p>
+  </div>
+  <span class="chip" id="chip">Dados ilustrativos</span>
+</header>
+
+<div class="bar" role="toolbar" aria-label="Filtros">
+  <div class="fl">Marca <div class="seg" id="fBrand"></div></div>
+  <div class="fl">Ponte do LR vs <div class="seg" id="fBase"></div></div>
+</div>
+
+<section id="b1" aria-labelledby="h-b1"></section>
+<section id="b2" class="sec2" aria-labelledby="h-b2"></section>
+
+<details id="dataBox">
+  <summary>Dados base, definições e carregar dados reais</summary>
+  <div class="in">
+    <div class="defs">
+      <div><b>Gross LR</b> = claims charge ÷ prémios adquiridos</div>
+      <div><b>Frequência</b> = nº de sinistros ÷ exposição (anos-risco)</div>
+      <div><b>Custo médio</b> = claims charge ÷ nº de sinistros</div>
+      <div><b>Prémio médio</b> = prémios adquiridos ÷ exposição</div>
+      <div><b>Burning cost</b> = claims charge ÷ exposição = frequência × custo médio</div>
+      <div><b>Total (DP+RC)</b>: exposição = exposição da RC; sinistros = DP + RC</div>
+    </div>
+    <p class="n">Tudo o que aparece no dashboard é calculado a partir de 4 valores por linha: exposição, prémios adquiridos, nº de sinistros e claims charge. Uma linha por <b>vista × marca × carteira × cobertura</b>. Cola abaixo os dados reais (separador vírgula, ponto e vírgula ou tab) e carrega.</p>
+    <p class="n">Colunas: <code>view</code> (FY24, FY25, YTD25, ORC, YTD26) · <code>brand</code> · <code>seg</code> (Novo negócio / Renovações) · <code>cov</code> (DP / RC) · <code>exposure</code> · <code>ep</code> · <code>claims</code> · <code>cc</code></p>
+    <textarea id="csv" spellcheck="false" aria-label="Dados em CSV" placeholder="view,brand,seg,cov,exposure,ep,claims,cc"></textarea>
+    <div class="btns">
+      <button class="btn" id="bLoad">Carregar dados</button>
+      <button class="btn s" id="bTpl">Preencher com modelo (CSV)</button>
+      <button class="btn s" id="bDemo">Repor dados ilustrativos</button>
+    </div>
+    <p id="msg" role="status"></p>
+    <p class="n" style="margin-top:10px">Os dados carregados só vivem nesta sessão da página: ao recarregar volta aos ilustrativos.</p>
+  </div>
+</details>
+
+<footer><i></i><span id="foot">Claims Drivers · Valores absolutos só comparados entre vistas YTD (mesmo período); rácios comparados em todas as vistas · Δ em pp ou % (teal = melhor, vermelho = pior) · Dados ilustrativos</span></footer>
+</div>
+<div id="tip"></div>
+
+<script>
+/* ============ DADOS ============ */
+const VIEWS=['FY24','FY25','YTD25','ORC','YTD26'];
+const VL={FY24:'FY24',FY25:'FY25',YTD25:'YTD25',ORC:'Orç. 26',YTD26:'YTD26'};
+const SEGS=['Novo negócio','Renovações'];
+const COVS=['DP','RC'];
+const COVN={DP:'Danos Próprios',RC:'Responsabilidade Civil'};
+
+function rng(s){return function(){s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function buildDemo(){
+  const R=rng(11),rows=[];
+  const B={A:{exp:300000,ns:.13,dp:.58,pf:1.04,t:{'Novo negócio':.556,'Renovações':.519}},
+           B:{exp:420000,ns:.16,dp:.52,pf:1.00,t:{'Novo negócio':.606,'Renovações':.566}},
+           C:{exp:160000,ns:.22,dp:.46,pf:.97,t:{'Novo negócio':.650,'Renovações':.606}}};
+  const C0={RC:{f:.053,c:2150,p:235},DP:{f:.110,c:1200,p:285}};
+  const SG={'Novo negócio':{f:1.06,p:.98},'Renovações':{f:1,p:1}};
+  const VF={FY24:{e:1.2*.93,p:.915,f:1.03,c:.935},FY25:{e:1.2*.97,p:.955,f:1.015,c:.975},YTD25:{e:.97,p:.962,f:1.005,c:.968},ORC:{e:1.01,p:.992,f:1.012,c:1},YTD26:{e:1,p:1,f:1,c:1}};
+  const AD={A:{ORC:{f:1.03}},B:{ORC:{f:.985}},C:{ORC:{f:.96,c:.98},YTD25:{f:.98}}};
+  const nz=()=>1+(R()-.5)*.02;
+  for(const [b,P] of Object.entries(B)){
+    const k={};
+    for(const sg of SEGS){
+      const share=sg==='Novo negócio'?P.ns:1-P.ns,ex=P.exp*10/12*share;
+      let ep=0,cc=0;
+      for(const cv of COVS){const e=ex*(cv==='DP'?P.dp:1),c=C0[cv];ep+=e*c.p*P.pf*SG[sg].p;cc+=e*c.f*SG[sg].f*c.c}
+      k[sg]=P.t[sg]*ep/cc;
+    }
+    for(const v of VIEWS)for(const sg of SEGS)for(const cv of COVS){
+      const share=sg==='Novo negócio'?P.ns:1-P.ns,c=C0[cv],vf=VF[v],ad=(AD[b]&&AD[b][v])||{};
+      const e=P.exp*10/12*share*(cv==='DP'?P.dp:1)*vf.e*nz();
+      const p=c.p*P.pf*SG[sg].p*vf.p*nz();
+      const f=c.f*SG[sg].f*vf.f*(ad.f||1)*nz();
+      const co=c.c*k[sg]*vf.c*(ad.c||1)*nz();
+      const cl=Math.round(e*f);
+      rows.push({view:v,brand:b,seg:sg,cov:cv,exposure:Math.round(e),ep:Math.round(e*p),claims:cl,cc:Math.round(cl*co)});
+    }
+  }
+  return rows;
+}
+/* >>> DADOS REAIS: colar entre as crases o CSV (cabeçalho view,brand,seg,cov,exposure,ep,claims,cc). Vazio = dados ilustrativos. <<< */
+const EMBEDDED_CSV=``;
+let ROWS=buildDemo(),isDemo=true;
+const state={brand:'Grupo',base:'YTD25',seg:'Novo negócio'};
+
+/* ============ CÁLCULO ============ */
+const mk=(ep,cc,cl,ex)=>({ep,cc,cl,ex,lr:ep?cc/ep:NaN,freq:ex?cl/ex:NaN,cost:cl?cc/cl:NaN,prem:ex?ep/ex:NaN,bc:ex?cc/ex:NaN});
+function agg(v,{brand='Grupo',seg='Total',cov='Total'}={}){
+  let ep=0,cc=0,cl=0,ex=0;
+  for(const r of ROWS){
+    if(r.view!==v)continue;
+    if(brand!=='Grupo'&&r.brand!==brand)continue;
+    if(seg!=='Total'&&r.seg!==seg)continue;
+    if(cov!=='Total'&&r.cov!==cov)continue;
+    ep+=r.ep;cc+=r.cc;cl+=r.claims;
+    if(cov==='Total'){if(r.cov==='RC')ex+=r.exposure}else ex+=r.exposure;
+  }
+  return mk(ep,cc,cl,ex);
+}
+const allViews=F=>Object.fromEntries(VIEWS.map(v=>[v,agg(v,F)]));
+const brandList=()=>[...new Set(ROWS.map(r=>r.brand))];
+const bl=b=>b==='Grupo'?'Grupo':(String(b).length<=2?'Marca '+b:b);
+
+function bridgeData(F,baseKey){
+  const a=agg(baseKey,F),b=agg('YTD26',F);
+  const s0=a.lr*100,s1=a.freq*a.cost/b.prem*100,s2=b.freq*a.cost/b.prem*100,s3=b.lr*100;
+  return{v0:s0,v1:s3,base:baseKey,eff:[{k:'prem',l:'Prémio médio',v:s1-s0},{k:'freq',l:'Frequência',v:s2-s1},{k:'cost',l:'Custo médio',v:s3-s2}],cum:[s0,s1,s2,s3]};
+}
+
+/* ============ FORMATOS ============ */
+const $=s=>document.querySelector(s);
+const nf=(x,d=1)=>isFinite(x)?x.toLocaleString('pt-PT',{minimumFractionDigits:d,maximumFractionDigits:d}):'–';
+const pct=(x,d=1)=>isFinite(x)?nf(x*100,d)+'%':'–';
+const eurM=x=>isFinite(x)?nf(x/1e6,1)+' M€':'–';
+const eur=x=>isFinite(x)?nf(x,0)+' €':'–';
+const sgn=(x,d=1)=>Math.abs(x)<0.5*Math.pow(10,-d)?nf(0,d):(x>0?'+':'−')+nf(Math.abs(x),d);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function delta(cur,base,kind,good){
+  if(!isFinite(cur)||!isFinite(base))return{cls:'neu',arrow:'',txt:'–',v:NaN};
+  const v=kind==='pp'?(cur-base)*100:(cur/base-1)*100,z=Math.abs(v)<0.05;
+  return{v,cls:z?'neu':((v>0)===(good==='up')?'good':'bad'),arrow:z?'▬':v>0?'▲':'▼',txt:(z?nf(0,1):sgn(v,1))+(kind==='pp'?' pp':'%')};
+}
+const dHTML=(d,lab)=>`<span class="dl ${d.cls}"><i>${d.arrow}</i>${d.txt}</span> <span class="dlab">${lab}</span>`;
+const COL={good:'#0F7C85',bad:'#C8321A',neu:'#6B6B6B'};
+
+const KPIS=[
+ {k:'ep',label:'Prémios adquiridos',fmt:eurM,kind:'rel',good:'up'},
+ {k:'cc',label:'Claims charge',fmt:eurM,kind:'rel',good:'down'},
+ {k:'lr',label:'Gross LR',fmt:pct,kind:'pp',good:'down'},
+ {k:'freq',label:'Frequência',fmt:pct,kind:'rel',good:'down'},
+ {k:'cost',label:'Custo médio',fmt:eur,kind:'rel',good:'down'},
+ {k:'prem',label:'Prémio médio',fmt:eur,kind:'rel',good:'up'}];
+const tile=(k,a,p,o)=>`<div class="tile"><p class="tl">${k.label}</p><p class="tv">${k.fmt(a[k.k])}</p><p class="td">${dHTML(delta(a[k.k],p[k.k],k.kind,k.good),'vs YTD25')}</p><p class="td">${dHTML(delta(a[k.k],o[k.k],k.kind,k.good),'vs Orç.')}</p></div>`;
+
+function niceTicks(lo,hi,n){
+  if(!(hi>lo))hi=lo+1;
+  const raw=(hi-lo)/n,p=Math.pow(10,Math.floor(Math.log10(raw))),f=raw/p,st=(f<=1?1:f<=2?2:f<=5?5:10)*p;
+  let v=Math.floor(lo/st+1e-9)*st;const t=[+v.toFixed(10)];
+  while(v<hi-1e-9){v+=st;t.push(+v.toFixed(10))}
+  return t;
+}
+const rt=(x,y,w,h,r)=>{r=Math.min(r,w/2,h);return`M${x},${y+h}V${y+r}Q${x},${y} ${x+r},${y}H${x+w-r}Q${x+w},${y} ${x+w},${y+r}V${y+h}Z`};
+
+/* ============ GRÁFICO: pontos por vista (estilo pricing follow up) ============ */
+function legendViews(){
+  return`<div class="legend" aria-label="Legenda">
+  <span><svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="6" fill="#F7F4ED" stroke="#6B7F92" stroke-width="3"/></svg>FY24</span>
+  <span><svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7" fill="#6B7F92"/></svg>FY25</span>
+  <span><svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7" fill="#3F78A8"/></svg>YTD25</span>
+  <span><svg width="18" height="18" viewBox="0 0 18 18"><rect x="7" y="1" width="4" height="16" rx="2" fill="#14283A"/></svg>Orç. 26</span>
+  <span><svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="8" fill="#F2541B"/></svg><b>YTD26</b></span></div>`;
+}
+function tracksSVG(rows,o){
+  const W=o.W||760,L=o.L||96,RH=38,AX=24,HDR=o.header?24:4;
+  const cV=W-170,cD1=W-88,cD2=W-8,x0=L+10,x1=cV-84;
+  const key=o.key;
+  const all=rows.flatMap(r=>VIEWS.map(v=>o.disp(r.m[v][key]))).filter(isFinite);
+  const lo=Math.min(...all),hi=Math.max(...all),pad=(hi-lo)*.18||Math.abs(hi)*.02||1;
+  const tk=niceTicks(lo-pad,hi+pad,o.nt||4),mn=tk[0],mx=tk[tk.length-1];
+  const X=v=>x0+(v-mn)/(mx-mn)*(x1-x0);
+  const H=HDR+rows.length*RH+AX;
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.aria)}">`;
+  if(o.header){
+    s+=`<text x="${cV}" y="14" text-anchor="end" font-size="12" font-weight="700" fill="#4A5A68">YTD26</text>`;
+    s+=`<text x="${cD1}" y="14" text-anchor="end" font-size="12" font-weight="700" fill="#4A5A68">Δ YTD25</text>`;
+    s+=`<text x="${cD2}" y="14" text-anchor="end" font-size="12" font-weight="700" fill="#4A5A68">Δ Orç.</text>`;
+  }
+  const yb=HDR+rows.length*RH;
+  tk.forEach(t=>{const x=X(t);s+=`<line x1="${x}" y1="${HDR}" x2="${x}" y2="${yb}" stroke="#E0E3E1" stroke-width="1.5"/><text x="${x}" y="${yb+17}" text-anchor="middle" font-size="12" fill="#5A6874">${o.tickFmt(t)}</text>`});
+  rows.forEach((r,i)=>{
+    const y=HDR+i*RH,cy=y+RH/2,m=r.m;
+    if(r.sel)s+=`<rect x="0" y="${y+2}" width="${W}" height="${RH-4}" rx="8" fill="#EFEAE0"/>`;
+    else if(i>0)s+=`<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="#E3DCCF" stroke-width="1.5"/>`;
+    s+=`<text x="6" y="${cy+5}" font-size="14" font-weight="${r.bold?700:500}" fill="#1E1E1E">${esc(r.label)}</text>`;
+    const d={};VIEWS.forEach(v=>d[v]=o.disp(m[v][key]));
+    const vals=VIEWS.map(v=>d[v]).filter(isFinite);
+    if(vals.length){s+=`<line x1="${X(Math.min(...vals))}" y1="${cy}" x2="${X(Math.max(...vals))}" y2="${cy}" stroke="#C9D3DC" stroke-width="5" stroke-linecap="round"/>`}
+    const tip=v=>esc(`${r.label} · ${VL[v]}: ${o.fmt(m[v][key])}`);
+    const ring=r.sel?'#EFEAE0':'#F7F4ED';
+    if(isFinite(d.FY24))s+=`<circle class="tip" data-tip="${tip('FY24')}" cx="${X(d.FY24)}" cy="${cy}" r="8" fill="${ring}" stroke="#6B7F92" stroke-width="4"/>`;
+    if(isFinite(d.FY25))s+=`<circle class="tip" data-tip="${tip('FY25')}" cx="${X(d.FY25)}" cy="${cy}" r="8" fill="#6B7F92" stroke="${ring}" stroke-width="2.5"/>`;
+    if(isFinite(d.YTD25))s+=`<circle class="tip" data-tip="${tip('YTD25')}" cx="${X(d.YTD25)}" cy="${cy}" r="8" fill="#3F78A8" stroke="${ring}" stroke-width="2.5"/>`;
+    if(isFinite(d.ORC))s+=`<rect class="tip" data-tip="${tip('ORC')}" x="${X(d.ORC)-3}" y="${cy-13}" width="6" height="26" rx="2" fill="#14283A" stroke="${ring}" stroke-width="2"/>`;
+    if(isFinite(d.YTD26))s+=`<circle class="tip" data-tip="${tip('YTD26')}" cx="${X(d.YTD26)}" cy="${cy}" r="10.5" fill="#F2541B" stroke="${ring}" stroke-width="2.5"/>`;
+    s+=`<text x="${cV}" y="${cy+5}" text-anchor="end" font-size="15" font-weight="700" fill="#1E1E1E">${o.fmt(m.YTD26[key])}</text>`;
+    [[cD1,'YTD25'],[cD2,'ORC']].forEach(([cx,bv])=>{const dd=delta(m.YTD26[key],m[bv][key],o.kind,'down');s+=`<text x="${cx}" y="${cy+5}" text-anchor="end" font-size="14" font-weight="700" fill="${COL[dd.cls]}">${dd.txt.replace(' pp','').replace('%','')}</text>`});
+  });
+  return s+'</svg>';
+}
+const METRICS={
+  lr:{key:'lr',name:'Gross LR',disp:x=>x*100,fmt:x=>pct(x),tickFmt:t=>nf(t,0)+'%',kind:'pp',unit:'pp'},
+  freq:{key:'freq',name:'Frequência',disp:x=>x*100,fmt:x=>pct(x,2),tickFmt:t=>nf(t,1)+'%',kind:'rel',unit:'%'},
+  cost:{key:'cost',name:'Custo médio',disp:x=>x,fmt:x=>eur(x),tickFmt:t=>nf(t,0),kind:'rel',unit:'%'}};
+
+/* ============ GRÁFICO: EP vs Claims charge (só YTD) ============ */
+function barsSVG(F){
+  const vs=['YTD25','ORC','YTD26'],W=460,H=282,L=42,T=28,B=62,R=6;
+  const D=vs.map(v=>agg(v,F)),max=Math.max(...D.flatMap(d=>[d.ep,d.cc]))/1e6;
+  if(!isFinite(max)||max<=0)return'<p class="cap">Sem dados.</p>';
+  const tk=niceTicks(0,max*1.1,4),top=tk[tk.length-1],ph=H-T-B,pw=W-L-R,Y=v=>T+ph-v/top*ph,gw=pw/3,bw=Math.min(46,gw*.32);
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Prémios adquiridos e claims charge por vista YTD">`;
+  tk.forEach(t=>{s+=`<line x1="${L}" y1="${Y(t)}" x2="${W-R}" y2="${Y(t)}" stroke="${t===0?'#C9D3DC':'#E0E3E1'}" stroke-width="${t===0?2:1.5}"/><text x="${L-6}" y="${Y(t)+4}" text-anchor="end" font-size="12" fill="#5A6874">${nf(t,0)}</text>`});
+  s+=`<text x="${L-6}" y="14" text-anchor="end" font-size="12" fill="#5A6874">M€</text>`;
+  D.forEach((d,i)=>{
+    const cx=L+gw*(i+.5),cur=vs[i]==='YTD26';
+    [[d.ep,cx-bw-2,'#6B7F92','Prémios adquiridos'],[d.cc,cx+2,'#14283A','Claims charge']].forEach(([v,x,c,n])=>{
+      const h=v/1e6/top*ph;
+      s+=`<path class="tip" data-tip="${esc(VL[vs[i]]+' · '+n+': '+eurM(v))}" d="${rt(x,Y(v/1e6),bw,h,4)}" fill="${c}"/><text x="${x+bw/2}" y="${Y(v/1e6)-6}" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1E1E1E">${nf(v/1e6,1)}</text>`;
+    });
+    s+=`<text x="${cx}" y="${H-B+20}" text-anchor="middle" font-size="14" font-weight="${cur?700:500}" fill="${cur?'#F2541B':'#1E1E1E'}">${VL[vs[i]]}</text>`;
+    s+=`<text x="${cx}" y="${H-B+39}" text-anchor="middle" font-size="13" fill="#4A5A68">LR <tspan font-weight="700" fill="#1E1E1E">${pct(d.lr)}</tspan></text>`;
+  });
+  return s+'</svg>';
+}
+const legendBars=()=>`<div class="legend"><span><svg width="14" height="14"><rect width="14" height="14" rx="3" fill="#6B7F92"/></svg>Prémios adquiridos</span><span><svg width="14" height="14"><rect width="14" height="14" rx="3" fill="#14283A"/></svg>Claims charge</span></div>`;
+
+/* ============ GRÁFICO: ponte do LR ============ */
+function bridgeSVG(F,baseKey){
+  const bd=bridgeData(F,baseKey);
+  if(!bd.cum.every(isFinite))return'<p class="cap">Sem dados.</p>';
+  const W=460,H=282,L=38,T=26,B=50,R=6,ph=H-T-B,pw=W-L-R;
+  const lo=Math.floor(Math.min(...bd.cum)-1.5),hi=Math.ceil(Math.max(...bd.cum)+1.2);
+  const tk=niceTicks(lo,hi,4),mn=tk[0],mx=tk[tk.length-1],Y=v=>T+ph-(v-mn)/(mx-mn)*ph;
+  const sl=pw/5,bw=Math.min(54,sl*.62);
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Ponte do Gross LR de ${VL[baseKey]} para YTD26">`;
+  tk.forEach(t=>{s+=`<line x1="${L}" y1="${Y(t)}" x2="${W-R}" y2="${Y(t)}" stroke="#E0E3E1" stroke-width="1.5"/><text x="${L-6}" y="${Y(t)+4}" text-anchor="end" font-size="12" fill="#5A6874">${nf(t,0)}%</text>`});
+  const bars=[{l:'LR '+VL[baseKey],v:bd.v0,t:'tot',c:'#6B7F92'},...bd.eff.map((e,i)=>({l:e.l,v:e.v,t:'eff',a:bd.cum[i],b:bd.cum[i+1]})),{l:'LR YTD26',v:bd.v1,t:'tot',c:'#F2541B'}];
+  bars.forEach((b,i)=>{
+    const cx=L+sl*(i+.5),x=cx-bw/2;
+    if(b.t==='tot'){
+      s+=`<path class="tip" data-tip="${esc(b.l+': '+nf(b.v,1)+'%')}" d="${rt(x,Y(b.v),bw,Y(mn)-Y(b.v),5)}" fill="${b.c}"/><text x="${cx}" y="${Y(b.v)-7}" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1E1E1E">${nf(b.v,1)}%</text>`;
+    }else{
+      const up=b.v>0,y0=Y(Math.max(b.a,b.b)),h=Math.max(Math.abs(Y(b.a)-Y(b.b)),2),c=Math.abs(b.v)<.05?'#6B6B6B':(up?'#C8321A':'#0F7C85');
+      s+=`<rect class="tip" data-tip="${esc(b.l+': '+sgn(b.v,2)+' pp no LR')}" x="${x}" y="${y0}" width="${bw}" height="${h}" rx="3" fill="${c}"/><text x="${cx}" y="${y0-7}" text-anchor="middle" font-size="13" font-weight="700" fill="${c}">${up?'▲':b.v<0?'▼':''} ${sgn(b.v,1)}</text>`;
+    }
+    if(i<4){const lv=i===0?bd.cum[0]:i<4?bd.cum[i]:bd.cum[3];s+=`<line x1="${x+bw}" y1="${Y(lv)}" x2="${x+sl}" y2="${Y(lv)}" stroke="#9AA7B2" stroke-width="1.5" stroke-dasharray="3 3"/>`}
+    const ln=b.l.split(' ');const two=ln.length>1?[ln[0],ln.slice(1).join(' ')]:[b.l,''];
+    s+=`<text x="${cx}" y="${H-B+18}" text-anchor="middle" font-size="12.5" fill="#1E1E1E" font-weight="${i===4?700:500}">${esc(two[0])}</text><text x="${cx}" y="${H-B+33}" text-anchor="middle" font-size="12.5" fill="#1E1E1E" font-weight="${i===4?700:500}">${esc(two[1])}</text>`;
+  });
+  return s+'</svg>';
+}
+
+/* ============ HIGHLIGHTS ============ */
+const hi=(t,x)=>`<div class="hi"><b>${t}</b><span>${x}</span></div>`;
+const ppx=v=>`${sgn(v,1)} pp`;
+function highlightsB1(){
+  const F={brand:state.brand},a=agg('YTD26',F),o=agg('ORC',F),p=agg('YTD25',F);
+  const dO=(a.lr-o.lr)*100,dP=(a.lr-p.lr)*100;
+  let out=hi(dO<=0?'Melhor que o orçamento':'Acima do orçamento',`${bl(state.brand)}: Gross LR <b>${pct(a.lr)}</b>, ${ppx(dO)} vs Orç. e ${ppx(dP)} vs YTD25. Prémios ${eurM(a.ep)} e claims charge ${eurM(a.cc)}.`);
+  const bd=bridgeData(F,state.base),top=[...bd.eff].sort((x,y)=>Math.abs(y.v)-Math.abs(x.v))[0];
+  out+=hi(`Ponte: ${top.l.toLowerCase()} pesa mais`,`De ${VL[state.base]} para YTD26 o LR passa de ${nf(bd.v0,1)}% para ${nf(bd.v1,1)}%; ${top.l.toLowerCase()} explica <b>${ppx(top.v)}</b>.`);
+  const bs=brandList().map(b=>({b,d:(agg('YTD26',{brand:b}).lr-agg('ORC',{brand:b}).lr)*100,lr:agg('YTD26',{brand:b}).lr})).filter(x=>isFinite(x.d)).sort((x,y)=>y.d-x.d);
+  if(bs.length){const w=bs[0];out+=w.d>0?hi(`${bl(w.b)} é a que mais pesa`,`LR ${pct(w.lr)}, <b>${ppx(w.d)}</b> vs Orç.`):hi('Todas as marcas dentro do orçamento',`A que mais se aproxima: ${bl(w.b)} (${ppx(w.d)} vs Orç.).`)}
+  return out;
+}
+function highlightsB2(){
+  const F={brand:state.brand};
+  const n=agg('YTD26',{...F,seg:'Novo negócio'}),r=agg('YTD26',{...F,seg:'Renovações'});
+  let out=hi('Novo negócio vs renovações',`Gross LR do novo negócio <b>${pct(n.lr)}</b> contra ${pct(r.lr)} nas renovações (${ppx((n.lr-r.lr)*100)}). Peso do novo negócio nos prémios: ${pct(n.ep/(n.ep+r.ep),0)}.`);
+  const cv=COVS.map(c=>{const a=agg('YTD26',{...F,seg:state.seg,cov:c}),o=agg('ORC',{...F,seg:state.seg,cov:c});return{c,a,d:(a.lr-o.lr)*100,bd:bridgeData({...F,seg:state.seg,cov:c},'ORC')}}).filter(x=>isFinite(x.d));
+  if(cv.length===2){
+    const hiLR=[...cv].sort((x,y)=>y.a.lr-x.a.lr)[0];
+    out+=hi(`${COVN[hiLR.c]} tem o LR mais alto`,`${cv.map(x=>`${x.c} <b>${pct(x.a.lr)}</b> (${ppx(x.d)} vs Orç.)`).join(' · ')} — ${state.seg==='Total'?'carteira total':state.seg.toLowerCase()}.`);
+    const w=[...cv].sort((x,y)=>y.d-x.d)[0],tp=[...w.bd.eff].sort((x,y)=>Math.abs(y.v)-Math.abs(x.v))[0];
+    out+=hi(`${w.c}: o que explica o desvio`,`Vs Orç., ${tp.l.toLowerCase()} é o maior efeito (<b>${ppx(tp.v)}</b>) no LR da ${COVN[w.c]}.`);
+  }
+  return out;
+}
+
+/* ============ BLOCO 1 ============ */
+function renderB1(){
+  const F={brand:state.brand},a=agg('YTD26',F),p=agg('YTD25',F),o=agg('ORC',F);
+  const brs=[...brandList(),'Grupo'];
+  const secs=['lr','freq','cost'].map(mk_=>{
+    const M=METRICS[mk_];
+    const rows=brs.map(b=>({label:bl(b),bold:b==='Grupo',sel:b===state.brand,m:allViews({brand:b})}));
+    return`<div style="margin-top:6px"><p class="sub-h">${M.name} por marca <span style="font-weight:400;color:var(--muted)">· Δ em ${M.unit}</span></p>${tracksSVG(rows,{...M,header:mk_==='lr',aria:M.name+' por marca e vista'})}</div>`;
+  }).join('');
+  const comp=['FY24','FY25','YTD25','ORC','YTD26'].map(v=>agg(v,F));
+  const trow=(lab,f)=>`<tr><td>${lab}</td>${comp.map(c=>`<td>${f(c)}</td>`).join('')}</tr>`;
+  $('#b1').innerHTML=`
+  <div class="sec-h"><div><h2 id="h-b1">1 · Visão global do Motor — ${esc(bl(state.brand))}</h2><p>Carteira total (novo negócio + renovações, DP + RC) · YTD26 contra YTD25 e Orçamento</p></div></div>
+  <div class="b1">
+    <div class="stack">
+      <div class="tiles">${KPIS.map(k=>tile(k,a,p,o)).join('')}</div>
+      <div class="row2">
+        <div class="card"><h3>Prémios adquiridos e claims charge</h3><p class="cap">Só vistas YTD (mesmo período, comparáveis) · LR por vista por baixo</p>${legendBars()}${barsSVG(F)}</div>
+        <div class="card"><h3>Ponte do Gross LR: ${VL[state.base]} → YTD26</h3><p class="cap">Efeito em pp de prémio médio, frequência e custo médio · eixo truncado</p>${bridgeSVG(F,state.base)}</div>
+      </div>
+      <div class="card"><h3>Rentabilidade e drivers por marca</h3><p class="cap">Rácios comparados nas 5 vistas · linha cinzenta = amplitude das vistas · marca selecionada realçada</p>${legendViews()}${secs}</div>
+      <details style="margin-top:0"><summary>Ver tabela de dados — ${esc(bl(state.brand))}</summary><div class="in tabw"><table><thead><tr><th></th>${VIEWS.map(v=>`<th>${VL[v]}${v.startsWith('FY')?' (12m)':''}</th>`).join('')}</tr></thead><tbody>
+        ${trow('Prémios adquiridos',c=>eurM(c.ep))}${trow('Claims charge',c=>eurM(c.cc))}${trow('Gross LR',c=>pct(c.lr))}${trow('Nº sinistros',c=>nf(c.cl,0))}${trow('Exposição (anos-risco)',c=>nf(c.ex,0))}${trow('Frequência',c=>pct(c.freq,2))}${trow('Custo médio',c=>eur(c.cost))}${trow('Prémio médio',c=>eur(c.prem))}${trow('Burning cost',c=>eur(c.bc))}</tbody></table></div></details>
+    </div>
+    <aside class="hl" aria-label="Highlights"><div class="hh"><i></i><h3>Highlights</h3></div>${highlightsB1()}</aside>
+  </div>`;
+}
+
+/* ============ BLOCO 2 ============ */
+function covPanel(cov){
+  const F={brand:state.brand,seg:state.seg,cov},a=agg('YTD26',F),p=agg('YTD25',F),o=agg('ORC',F);
+  const tot=agg('YTD26',{brand:state.brand,seg:state.seg}),av=allViews(F);
+  const shEP=tot.ep?a.ep/tot.ep:0,shCC=tot.cc?a.cc/tot.cc:0;
+  const rowsOf=()=>[{label:bl(state.brand),bold:true,sel:false,m:av}];
+  const tr=['lr','freq','cost'].map((k,i)=>{const M=METRICS[k];return`<div><p class="sub-h" style="margin:6px 0 0">${M.name}</p>${tracksSVG(rowsOf(),{...M,W:560,L:84,header:i===0,nt:3,aria:`${M.name} ${COVN[cov]} por vista`})}</div>`}).join('');
+  return`<div class="card">
+    <div class="covh"><h3>${COVN[cov]} (${cov})</h3>
+      <div class="meters"><div>Peso nos prémios <b>${pct(shEP,0)}</b><div class="meter"><span style="width:${(shEP*100).toFixed(0)}%"></span></div></div><div>Peso no claims charge <b>${pct(shCC,0)}</b><div class="meter"><span style="width:${(shCC*100).toFixed(0)}%"></span></div></div></div></div>
+    <div class="tiles sm">${KPIS.map(k=>tile(k,a,p,o)).join('')}</div>
+    <p class="sub-h">LR, frequência e custo médio por vista</p>${legendViews()}${tr}
+    <p class="sub-h" style="margin-top:14px">Ponte do Gross LR: ${VL[state.base]} → YTD26</p>${bridgeSVG(F,state.base)}
+  </div>`;
+}
+function tableB2(){
+  const brs=[...brandList(),'Grupo'];
+  const cell=(b,c)=>{const a=agg('YTD26',{brand:b,seg:state.seg,cov:c}),o=agg('ORC',{brand:b,seg:state.seg,cov:c}),d=delta(a.lr,o.lr,'pp','down');
+    return`<td>${eurM(a.ep)}</td><td><b>${pct(a.lr)}</b></td><td class="${d.cls}"><b>${d.arrow} ${d.txt.replace(' pp','')}</b></td><td>${pct(a.freq,2)}</td><td>${eur(a.cost)}</td>`};
+  return`<div class="card" style="margin-top:16px"><h3>Resumo por marca — ${esc(state.seg==='Total'?'carteira total':state.seg)} · YTD26</h3><p class="cap">Δ LR em pp vs Orçamento (teal = melhor, vermelho = pior)</p><div class="tabw"><table>
+  <thead><tr class="g"><th></th><th colspan="5">Danos Próprios</th><th colspan="5">Responsabilidade Civil</th></tr>
+  <tr><th></th>${['Prémios','LR','Δ Orç.','Freq.','Custo méd.'].map(h=>`<th>${h}</th>`).join('').repeat(2)}</tr></thead>
+  <tbody>${brs.map(b=>`<tr class="${b==='Grupo'?'tot':''}"><td>${esc(bl(b))}</td>${cell(b,'DP')}${cell(b,'RC')}</tr>`).join('')}</tbody></table></div></div>`;
+}
+function renderB2(){
+  $('#b2').innerHTML=`
+  <div class="sec-h"><div><h2 id="h-b2">2 · Detalhe por cobertura — ${esc(bl(state.brand))}</h2><p>Danos Próprios vs Responsabilidade Civil, por tipo de carteira (por defeito, novo negócio)</p></div>
+    <div class="fl">Carteira <div class="seg" id="fSeg"></div></div></div>
+  <div class="hl-strip">${highlightsB2()}</div>
+  <div class="cols2">${covPanel('DP')}${covPanel('RC')}</div>
+  ${tableB2()}`;
+  const fs=$('#fSeg');
+  ['Novo negócio','Renovações','Total'].forEach(s=>{const b=document.createElement('button');b.textContent=s==='Total'?'Total carteira':s;b.setAttribute('aria-pressed',state.seg===s);b.onclick=()=>{state.seg=s;renderB2()};fs.appendChild(b)});
+}
+
+/* ============ FILTROS, TOOLTIP, DADOS ============ */
+function renderBar(){
+  const fb=$('#fBrand');fb.innerHTML='';
+  ['Grupo',...brandList()].forEach(b=>{const e=document.createElement('button');e.textContent=bl(b);e.setAttribute('aria-pressed',state.brand===b);e.onclick=()=>{state.brand=b;renderBar();renderB1();renderB2()};fb.appendChild(e)});
+  const fa=$('#fBase');fa.innerHTML='';
+  [['YTD25','YTD25'],['ORC','Orçamento']].forEach(([k,l])=>{const e=document.createElement('button');e.textContent=l;e.setAttribute('aria-pressed',state.base===k);e.onclick=()=>{state.base=k;renderBar();renderB1();renderB2()};fa.appendChild(e)});
+  $('#chip').textContent=isDemo?'Dados ilustrativos':'Dados carregados';
+  $('#foot').textContent='Claims Drivers · Valores absolutos só comparados entre vistas YTD (mesmo período); rácios comparados em todas as vistas · Δ em pp ou % (teal = melhor, vermelho = pior)'+(isDemo?' · Dados ilustrativos':'');
+}
+const tipEl=$('#tip');
+function showTip(e){const t=e.target.closest&&e.target.closest('[data-tip]');if(!t){tipEl.style.opacity=0;return}
+  tipEl.textContent=t.getAttribute('data-tip');tipEl.style.opacity=1;
+  const w=tipEl.offsetWidth,x=Math.min(Math.max(8,e.clientX+12),innerWidth-w-8),y=e.clientY-tipEl.offsetHeight-12;
+  tipEl.style.left=x+'px';tipEl.style.top=(y<8?e.clientY+16:y)+'px';}
+document.addEventListener('pointermove',showTip);document.addEventListener('pointerdown',showTip);
+document.addEventListener('pointerleave',()=>tipEl.style.opacity=0);
+
+function normView(s){s=s.trim().toUpperCase().replace(/\s|\./g,'');if(/^OR[CÇ]/.test(s)||s==='BUDGET'||s==='BUD26')return'ORC';return s}
+function normSeg(s){s=s.trim().toLowerCase();if(s.startsWith('n'))return'Novo negócio';if(s.startsWith('r'))return'Renovações';return s}
+function normCov(s){s=s.trim().toUpperCase();if(s.startsWith('D'))return'DP';if(s.startsWith('R'))return'RC';return s}
+function parseCSV(txt){
+  const lines=txt.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  if(lines.length<2)throw new Error('Preciso de uma linha de cabeçalho e pelo menos uma linha de dados.');
+  const dl=lines[0].includes('\t')?'\t':lines[0].includes(';')?';':',';
+  const H=lines[0].split(dl).map(h=>h.trim().toLowerCase());
+  const need=['view','brand','seg','cov','exposure','ep','claims','cc'];
+  for(const n of need)if(!H.includes(n))throw new Error('Falta a coluna "'+n+'" no cabeçalho.');
+  const ix=Object.fromEntries(need.map(n=>[n,H.indexOf(n)]));
+  const num=(s,i,n)=>{let t=String(s).replace(/\s/g,'');if(dl!==','&&t.includes(','))t=t.replace(/\./g,'').replace(',','.');const v=parseFloat(t);if(!isFinite(v))throw new Error('Linha '+(i+1)+': valor inválido em "'+n+'".');return v};
+  const out=lines.slice(1).map((l,i)=>{const c=l.split(dl);const r={view:normView(c[ix.view]||''),brand:(c[ix.brand]||'').trim(),seg:normSeg(c[ix.seg]||''),cov:normCov(c[ix.cov]||'')};
+    if(!VIEWS.includes(r.view))throw new Error('Linha '+(i+2)+': view "'+c[ix.view]+'" não reconhecida (usa '+VIEWS.join(', ')+').');
+    if(!SEGS.includes(r.seg))throw new Error('Linha '+(i+2)+': seg "'+c[ix.seg]+'" não reconhecida.');
+    if(!COVS.includes(r.cov))throw new Error('Linha '+(i+2)+': cov "'+c[ix.cov]+'" não reconhecida (DP ou RC).');
+    if(!r.brand)throw new Error('Linha '+(i+2)+': marca vazia.');
+    r.exposure=num(c[ix.exposure],i+1,'exposure');r.ep=num(c[ix.ep],i+1,'ep');r.claims=num(c[ix.claims],i+1,'claims');r.cc=num(c[ix.cc],i+1,'cc');return r});
+  return out;
+}
+const toCSV=rows=>'view,brand,seg,cov,exposure,ep,claims,cc\n'+rows.map(r=>[r.view,r.brand,r.seg,r.cov,r.exposure,r.ep,r.claims,r.cc].join(',')).join('\n');
+function setMsg(t,ok){const m=$('#msg');m.textContent=t;m.style.color=ok?'#0F7C85':'#C8321A'}
+$('#bTpl').onclick=()=>{$('#csv').value=toCSV(buildDemo());setMsg('Modelo preenchido com os dados ilustrativos: substitui pelas linhas reais e carrega.',true)};
+$('#bLoad').onclick=()=>{try{const r=parseCSV($('#csv').value);ROWS=r;isDemo=false;if(state.brand!=='Grupo'&&!brandList().includes(state.brand))state.brand='Grupo';renderAll();setMsg('Carregadas '+r.length+' linhas. Dashboard atualizado.',true)}catch(e){setMsg(e.message,false)}};
+$('#bDemo').onclick=()=>{ROWS=buildDemo();isDemo=true;state.brand='Grupo';renderAll();setMsg('Dados ilustrativos repostos.',true)};
+function renderAll(){renderBar();renderB1();renderB2()}
+if(EMBEDDED_CSV.trim()){try{ROWS=parseCSV(EMBEDDED_CSV);isDemo=false}catch(e){console.error(e)}}
+renderAll();
+</script>
+</body>
+</html>
