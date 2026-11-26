@@ -1,22 +1,19 @@
 /*==========================================================================
   Projeto : Polaris - Fontes Datamart v2
-  Objetivo: Extrair amostra de linhas + estrutura (campos) de cada tabela
-            marcada como "Mapear" / "Analisar" no ficheiro de fontes,
-            para depois mapear os campos.
-  Saidas  : 1) amostras_tabelas.xlsx   -> 1 folha por tabela (n linhas)
-            2) estrutura_campos.xlsx   -> todos os campos de todas as tabelas
-                                          (com colunas vazias para mapeamento)
-            3) work.log_extracao       -> tabelas OK / nao encontradas
+  Objetivo: Listar as COLUNAS de cada tabela a mapear, com valores de exemplo.
+  Saida   : work.MAPEAMENTO_CAMPOS  (1 linha por coluna de cada tabela)
+              tabela | accao | ordem | campo_origem | tipo | tamanho | format
+              label | exemplo_1 ... exemplo_N | campo_polaris | descricao ...
+            work.LOG_EXTRACAO       (tabelas encontradas / nao encontradas)
 ==========================================================================*/
 
 /*---------------------------------------------------------------------------
   1. PARAMETROS  (ajustar)
 ---------------------------------------------------------------------------*/
-%let outdir = /caminho/para/output;   /* pasta de saida (Windows: C:\temp\polaris) */
-%let nobs   = 10;                     /* n.o de linhas por tabela */
-%let ultima_data = ;                  /* preencher se usar APOLICES_AUTO_&ultima_data */
+%let nobs        = 5;     /* n.o de linhas de exemplo por tabela (exemplo_1..exemplo_N) */
+%let ultima_data = ;      /* preencher se usar APOLICES_AUTO_&ultima_data */
 
-/* Libnames - descomentar/ajustar se ainda nao estiverem atribuidas na sessao */
+/* Libnames - descomentar/ajustar se ainda nao estiverem atribuidas */
 /*
 libname ODS      '/caminho/ods';
 libname ods_sem  '/caminho/ods_sem';
@@ -25,14 +22,13 @@ libname SGD      '/caminho/sgd';
 */
 
 /*---------------------------------------------------------------------------
-  2. LISTA DE TABELAS  (Acao = Mapear / Analisar)
+  2. LISTA DE TABELAS (input: Acao = Mapear / Analisar)
 ---------------------------------------------------------------------------*/
-data work.lista_tabelas;
-  length lib $32 tab $64 accao $10 sheet $31;
+data work._lista;
+  length lib $32 tab $64 accao $10;
   infile datalines dlm=' ' truncover;
   input lib $ tab $ accao $;
-  tab   = tranwrd(tab, '&ultima_data', "&ultima_data");
-  sheet = cats(put(_n_, z2.), '_', substr(tab, 1, min(28, length(tab))));
+  tab = tranwrd(tab, '&ultima_data', "&ultima_data");
 datalines;
 ODS sup_historico Mapear
 ODS cuerpoliza Mapear
@@ -58,28 +54,40 @@ SGD CLUSTERS Analisar
 ;
 run;
 
-/*---------------------------------------------------------------------------
-  3. MACRO DE EXTRACAO
----------------------------------------------------------------------------*/
-%macro extrai(lib=, tab=, sheet=, accao=);
+proc sql;
+  create table work._log
+    (lib char(32), tab char(64), accao char(10), estado char(20), nlinhas num, ncampos num);
+quit;
 
-  %local existe;
+/*---------------------------------------------------------------------------
+  3. MACRO: colunas + valores de exemplo de UMA tabela
+---------------------------------------------------------------------------*/
+%macro extrai(lib=, tab=, accao=);
+
+  %local existe nl nc;
   %let existe = 0;
-  %if %sysfunc(exist(&lib..&tab))          %then %let existe = 1;
+  %if %sysfunc(exist(&lib..&tab))             %then %let existe = 1;
   %else %if %sysfunc(exist(&lib..&tab, VIEW)) %then %let existe = 1;
 
   %if &existe = 0 %then %do;
     %put WARNING: Tabela &lib..&tab nao encontrada.;
     proc sql;
-      insert into work.log_extracao
+      insert into work._log
       set lib="&lib", tab="&tab", accao="&accao", estado="NAO ENCONTRADA", nlinhas=., ncampos=.;
     quit;
     %return;
   %end;
 
-  /* estrutura dos campos */
-  proc contents data=&lib..&tab out=work._c(keep=memname varnum name type length format formatl label nobs) noprint;
+  /* a) estrutura (colunas) */
+  proc contents data=&lib..&tab
+       out=work._c(keep=varnum name type length format label nobs) noprint;
   run;
+
+  proc sql noprint;
+    select max(nobs), count(*) into :nl trimmed, :nc trimmed from work._c;
+    insert into work._log
+    set lib="&lib", tab="&tab", accao="&accao", estado="OK", nlinhas=&nl, ncampos=&nc;
+  quit;
 
   data work._c;
     length tabela $70 accao $10 tipo $4;
@@ -87,70 +95,76 @@ run;
     tabela = "&lib..&tab";
     accao  = "&accao";
     tipo   = ifc(type = 1, 'NUM', 'CHAR');
-    drop type memname;
+    rename varnum=ordem name=campo_origem length=tamanho;
+    drop type nobs;
   run;
 
-  proc append base=work.estrutura data=work._c force; run;
+  proc append base=work._estrutura data=work._c force; run;
 
-  /* log */
-  proc sql noprint;
-    select max(nobs), count(*) into :nl trimmed, :nc trimmed from work._c;
-    insert into work.log_extracao
-    set lib="&lib", tab="&tab", accao="&accao", estado="OK", nlinhas=&nl, ncampos=&nc;
-  quit;
-
-  /* amostra -> 1 folha por tabela */
-  ods excel options(sheet_name="&sheet");
-  proc print data=&lib..&tab(obs=&nobs) noobs;
+  /* b) valores de exemplo: 1 registo por (linha, coluna) */
+  data work._v;
+    length _tabela_ $70 _campo_ $64 _valor_ $200 _linha_ 8 _nm_ $64;
+    set &lib..&tab(obs=&nobs);
+    _tabela_ = "&lib..&tab";
+    _linha_  = _n_;
+    _nm_     = ' ';
+    do until (_nm_ = ' ');
+      call vnext(_nm_);
+      if _nm_ ne ' ' and upcase(_nm_) not in
+         ('_N_','_ERROR_','_TABELA_','_CAMPO_','_VALOR_','_LINHA_','_NM_') then do;
+        _campo_ = _nm_;
+        _valor_ = strip(vvaluex(_nm_));
+        output;
+      end;
+    end;
+    keep _tabela_ _campo_ _valor_ _linha_;
   run;
+
+  proc append base=work._valores data=work._v force; run;
 
 %mend extrai;
 
 /*---------------------------------------------------------------------------
   4. EXECUCAO
 ---------------------------------------------------------------------------*/
-proc sql;
-  create table work.log_extracao
-    (lib char(32), tab char(64), accao char(10), estado char(20), nlinhas num, ncampos num);
+proc datasets lib=work nolist nowarn;
+  delete _estrutura _valores;
 quit;
 
-proc datasets lib=work nolist; delete estrutura; quit;
-
-ods excel file="&outdir/amostras_tabelas.xlsx";
-options nodate nonumber;
-
 data _null_;
-  set work.lista_tabelas;
-  call execute(cats('%nrstr(%extrai)(lib=', lib, ', tab=', tab,
-                    ', sheet=', sheet, ', accao=', accao, ')'));
+  set work._lista;
+  call execute(cats('%nrstr(%extrai)(lib=', lib, ', tab=', tab, ', accao=', accao, ')'));
 run;
-
-ods excel close;
 
 /*---------------------------------------------------------------------------
-  5. FICHEIRO DE ESTRUTURA (template para o mapeamento)
+  5. TABELA FINAL: colunas + exemplos + colunas vazias para o mapeamento
 ---------------------------------------------------------------------------*/
-data work.estrutura_mapeamento;
-  length campo_polaris $64 descricao $200 regra_transformacao $200 comentario $200;
-  set work.estrutura;
-  call missing(campo_polaris, descricao, regra_transformacao, comentario);
-  rename name=campo_origem varnum=ordem formatl=format_len;
+proc sort data=work._valores; by _tabela_ _campo_ _linha_; run;
+
+proc transpose data=work._valores out=work._t(drop=_name_) prefix=exemplo_;
+  by _tabela_ _campo_;
+  id _linha_;
+  var _valor_;
 run;
 
-proc sort data=work.estrutura_mapeamento;
-  by tabela ordem;
+proc sort data=work._estrutura; by tabela campo_origem; run;
+proc sort data=work._t(rename=(_tabela_=tabela _campo_=campo_origem)) out=work._t; by tabela campo_origem; run;
+
+data work.mapeamento_campos;
+  length tabela $70 accao $10 ordem 8 campo_origem $64 tipo $4 tamanho 8
+         format $32 label $256 exemplo_1-exemplo_&nobs $200
+         campo_polaris $64 descricao $200 regra_transformacao $200 comentario $200;
+  merge work._estrutura work._t;
+  by tabela campo_origem;
 run;
 
-ods excel file="&outdir/estrutura_campos.xlsx" options(sheet_name="Campos");
-proc print data=work.estrutura_mapeamento noobs;
-  var tabela accao ordem campo_origem tipo length format format_len label nobs
-      campo_polaris descricao regra_transformacao comentario;
-run;
-ods excel options(sheet_name="Log");
-proc print data=work.log_extracao noobs; run;
-ods excel close;
+proc sort data=work.mapeamento_campos; by tabela ordem; run;
 
-/* resumo no output */
-title "Resumo da extracao";
-proc print data=work.log_extracao noobs; run;
-title;
+data work.log_extracao;
+  set work._log;
+run;
+
+/* limpeza dos intermedios */
+proc datasets lib=work nolist nowarn;
+  delete _lista _log _c _v _valores _estrutura _t;
+quit;
